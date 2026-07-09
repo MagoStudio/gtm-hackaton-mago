@@ -7,6 +7,7 @@ import { LeadSearchCenter } from "@/components/agents/lead-gen/LeadSearchCenter"
 import { LeadResultsTable, SearchLoadingAnimation, type LeadResult } from "@/components/agents/lead-gen/LeadResultsTable";
 import { UserSearch, Bookmark, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { MOCK_LEADS } from "@/lib/mock-leads";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -157,6 +158,23 @@ export default function LeadGen() {
       setLastQuery(query);
 
       try {
+        if (import.meta.env.DEV) {
+          await new Promise((r) => setTimeout(r, 1200));
+          const mockResults: LeadResult[] = MOCK_LEADS.map((l, i) => ({
+            ...l,
+            id: `mock-lead-${i + 1}`,
+            status: "pending" as const,
+            source: "mock",
+          }));
+          setLeads(mockResults);
+          const recentEntry: RecentSearch = { query, results: mockResults, timestamp: new Date().toISOString() };
+          const newRecent = [recentEntry, ...recentSearches.filter((s) => s.query !== query)].slice(0, 10);
+          setRecentSearches(newRecent);
+          persistSettings(savedICPs, newRecent);
+          toast.success(`${mockResults.length} leads discovered`);
+          return;
+        }
+
         const { data, error } = await supabase.functions.invoke("discover-leads", {
           body: { query },
         });
