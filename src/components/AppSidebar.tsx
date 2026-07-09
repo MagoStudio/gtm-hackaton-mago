@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Target, Kanban, Workflow, TrendingUp, LogOut, Settings, User } from "lucide-react";
+import { Target, Kanban, Workflow, LogOut, Settings, User } from "lucide-react";
+import { MagoLogo } from "@/components/MagoLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -50,11 +51,9 @@ export function AppSidebar() {
       <SidebarContent>
         {/* Logo */}
         <div className={`flex items-center gap-2.5 px-4 py-4 ${collapsed ? "justify-center px-2" : ""}`}>
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </div>
+          <MagoLogo className="h-8 w-8 shrink-0 rounded-lg" />
           {!collapsed && (
-            <span className="text-sm font-bold tracking-tight">Mago Growth OS</span>
+            <span className="text-sm font-bold tracking-tight">Mago GTM</span>
           )}
         </div>
 

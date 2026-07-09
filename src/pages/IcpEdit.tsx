@@ -16,8 +16,6 @@ import {
   type Icp,
   SILLAGE_SIGNAL_TYPES,
   TARGET_ENTITY_TYPES,
-  CONFIDENCE_LEVELS,
-  MATURITY_LEVELS,
   EXA_ENTITY_TYPES,
   EXA_SEARCH_MODES,
   EXA_FRESHNESS,
@@ -212,7 +210,6 @@ export default function IcpEdit() {
                 <TextField label="ICP name" value={S.icp_name} onChange={(v) => patch("icp_summary", { icp_name: v })} />
                 <TextField label="One-line definition" value={S.one_line_definition} onChange={(v) => patch("icp_summary", { one_line_definition: v })} />
                 <SelectField label="Target entity type" value={S.target_entity_type} options={TARGET_ENTITY_TYPES} onChange={(v) => patch("icp_summary", { target_entity_type: v as any })} />
-                <SelectField label="Confidence level" value={S.confidence_level} options={CONFIDENCE_LEVELS} onChange={(v) => patch("icp_summary", { confidence_level: v as any })} />
               </div>
               <TextField label="Primary goal" value={S.primary_goal} onChange={(v) => patch("icp_summary", { primary_goal: v })} textarea />
               <TextField label="Offer summary" value={S.offer_summary} onChange={(v) => patch("icp_summary", { offer_summary: v })} textarea />
@@ -250,21 +247,16 @@ export default function IcpEdit() {
             <Section title="Use Case & Operations">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TagInput label="What they do" values={O.what_they_do} onChange={(v) => patch("operational_criteria", { what_they_do: v })} />
-                <TagInput label="Workflows" values={O.workflows} onChange={(v) => patch("operational_criteria", { workflows: v })} />
                 <TagInput label="Volume / scale signals" values={O.volume_or_scale_signals} onChange={(v) => patch("operational_criteria", { volume_or_scale_signals: v })} />
                 <TagInput label="Use cases" values={O.use_cases} onChange={(v) => patch("operational_criteria", { use_cases: v })} />
-                <TagInput label="Current tools / alternatives" values={O.current_tools_or_alternatives} onChange={(v) => patch("operational_criteria", { current_tools_or_alternatives: v })} />
-                <SelectField label="Maturity level" value={O.maturity_level} options={MATURITY_LEVELS} onChange={(v) => patch("operational_criteria", { maturity_level: v as any })} />
               </div>
             </Section>
 
             {/* 4. Pain */}
-            <Section title="Pain Hypotheses">
+            <Section title="Pain & Trigger Events">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TagInput label="Known pains" values={P.known_pains} onChange={(v) => patch("pain_hypotheses", { known_pains: v })} />
-                <TagInput label="Pain hypotheses" values={P.pain_hypotheses} onChange={(v) => patch("pain_hypotheses", { pain_hypotheses: v })} />
                 <TagInput label="Trigger events" values={P.trigger_events} onChange={(v) => patch("pain_hypotheses", { trigger_events: v })} />
-                <SelectField label="Pain confidence" value={P.pain_confidence} options={CONFIDENCE_LEVELS} onChange={(v) => patch("pain_hypotheses", { pain_confidence: v as any })} />
               </div>
               <TagInput label="Pain validation questions" values={P.pain_validation_questions} onChange={(v) => patch("pain_hypotheses", { pain_validation_questions: v })} />
             </Section>
@@ -304,27 +296,52 @@ export default function IcpEdit() {
 
             {/* 8. Sillage signals */}
             <Section title="Sillage Signals">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {SILLAGE_SIGNAL_TYPES.map((type) => {
-                  const sig = icp.sillage_signal_config.selected_signals.find((s) => s.signal_type === type);
-                  const on = !!sig?.enabled;
-                  return (
-                    <div key={type} className={`rounded-lg border p-3 ${on ? "border-primary/50 bg-primary/[0.03]" : "border-border/50"}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium">{type.replace(/_/g, " ")}</span>
-                        <Switch checked={on} onCheckedChange={() => toggleSignal(type)} />
-                      </div>
-                      {on && sig && (
-                        <div className="mt-3 space-y-2">
-                          <SelectField label="Priority" value={sig.priority} options={SIGNAL_PRIORITIES} onChange={(v) => updateSignal(type, { priority: v as any })} />
-                          <TagInput label="Keywords" values={sig.keywords} onChange={(v) => updateSignal(type, { keywords: v })} />
-                          <TextField label="Reason for relevance" value={sig.reason_for_relevance} onChange={(v) => updateSignal(type, { reason_for_relevance: v })} />
+              {(() => {
+                const enabledSignals = icp.sillage_signal_config.selected_signals.filter((s) => s.enabled);
+                const enabledTypes = new Set(enabledSignals.map((s) => s.signal_type));
+                const remainingTypes = SILLAGE_SIGNAL_TYPES.filter((t) => !enabledTypes.has(t));
+                return (
+                  <div className="space-y-5">
+                    {enabledSignals.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Auto-selected</p>
+                        <div className="space-y-2">
+                          {enabledSignals.map((sig) => (
+                            <div key={sig.signal_type} className="rounded-lg border border-primary/50 bg-primary/[0.03] p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs font-medium capitalize">{sig.signal_type.replace(/_/g, " ")}</span>
+                                  {sig.reason_for_relevance && (
+                                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{sig.reason_for_relevance}</p>
+                                  )}
+                                </div>
+                                <Switch checked={true} onCheckedChange={() => toggleSignal(sig.signal_type)} />
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                <SelectField label="Priority" value={sig.priority} options={SIGNAL_PRIORITIES} onChange={(v) => updateSignal(sig.signal_type, { priority: v as any })} />
+                                <TagInput label="Keywords" values={sig.keywords} onChange={(v) => updateSignal(sig.signal_type, { keywords: v })} />
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      )}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        {enabledSignals.length > 0 ? "Add more signals" : "Signals"}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {remainingTypes.map((type) => (
+                          <div key={type} className="rounded-lg border border-border/50 p-3 flex items-center justify-between">
+                            <span className="text-xs font-medium capitalize">{type.replace(/_/g, " ")}</span>
+                            <Switch checked={false} onCheckedChange={() => toggleSignal(type)} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })()}
             </Section>
 
             {/* 9. Exa config */}

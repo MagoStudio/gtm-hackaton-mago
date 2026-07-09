@@ -16,12 +16,22 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const MOCK_USER = import.meta.env.DEV ? ({
+  id: 'mock-user-id',
+  email: 'alvaro@mago.studio',
+  role: 'authenticated',
+  aud: 'authenticated',
+  created_at: new Date().toISOString(),
+} as unknown as User) : null;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(MOCK_USER);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(MOCK_USER ? false : true);
 
   useEffect(() => {
+    if (MOCK_USER) return;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);

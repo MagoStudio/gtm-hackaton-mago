@@ -9,6 +9,122 @@ import { Textarea } from "@/components/ui/textarea";
 import { Target, Sparkles, ArrowRight, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const MOCK_ICP = {
+  icp_summary: {
+    icp_name: "Mock ICP",
+    one_line_definition: "B2B SaaS companies scaling their sales team",
+    target_entity_type: "company",
+    primary_goal: "Book demos with sales leaders at growing SaaS companies",
+    offer_summary: "AI-powered GTM platform",
+    confidence_level: "medium",
+    assumptions_to_validate: ["They have a dedicated sales team", "They use a CRM"],
+  },
+  target_account_criteria: {
+    company_types: ["SaaS", "Software"],
+    industries: ["Technology", "B2B Software"],
+    business_models: ["SaaS", "Subscription"],
+    company_size: { min_employees: 20, max_employees: 500 },
+    geographies: ["United States", "Europe"],
+    reference_companies: ["Salesforce", "HubSpot"],
+    similar_to_reference_companies: true,
+    funding_stage: ["Series A", "Series B"],
+    technology_keywords: ["CRM", "Sales automation"],
+    must_have_criteria: ["Has a sales team", "B2B focus"],
+    nice_to_have_criteria: ["Uses Salesforce", "Has SDR team"],
+  },
+  buyer_personas: {
+    target_titles: ["VP of Sales", "Head of Sales", "CRO"],
+    target_departments: ["Sales", "Revenue"],
+    seniority_levels: ["VP", "C-Level", "Director"],
+    persona_priority: ["VP of Sales", "CRO"],
+    excluded_titles: ["Intern", "Coordinator"],
+  },
+  exclusions: {
+    excluded_company_types: ["B2C", "Non-profit"],
+    excluded_industries: ["Gaming", "Media"],
+    excluded_keywords: ["freelance", "agency"],
+    excluded_titles: [],
+    bad_fit_examples: [],
+    disqualification_rules: ["Less than 10 employees", "No sales team"],
+  },
+  search_keywords: {
+    must_include_keywords: ["SaaS", "sales"],
+    semantic_keywords: ["revenue growth", "pipeline"],
+    related_terms: ["outbound", "SDR", "BDR"],
+    competitor_or_alternative_keywords: ["Outreach", "Apollo"],
+    exclude_keywords: ["agency", "consulting"],
+  },
+  exa_config: {
+    exa_entity_type: "company",
+    exa_search_mode: "websets",
+    exa_criteria: ["B2B SaaS company", "Has a sales team"],
+    exa_enrichments: [],
+    exa_result_count: 50,
+    exa_freshness: "last_90_days",
+    exa_output_fields: ["name", "website", "description"],
+  },
+  sillage_signal_config: {
+    selected_signals: [
+      {
+        signal_type: "hiring_signal",
+        enabled: true,
+        priority: "high",
+        keywords: ["SDR", "BDR", "Account Executive", "sales ops", "revenue operations"],
+        example_matches: [],
+        reason_for_relevance: "Companies actively hiring sales roles are building or scaling outbound motion — a strong indicator they need GTM tooling.",
+      },
+      {
+        signal_type: "funding_signal",
+        enabled: true,
+        priority: "high",
+        keywords: ["Series A", "Series B", "raised", "funding round", "investment"],
+        example_matches: [],
+        reason_for_relevance: "Freshly funded SaaS companies have budget to invest in growth infrastructure and are under pressure to hit revenue targets quickly.",
+      },
+      {
+        signal_type: "pain_keyword_signal",
+        enabled: true,
+        priority: "medium",
+        keywords: ["manual prospecting", "lead quality", "data enrichment", "pipeline visibility", "missed quota"],
+        example_matches: [],
+        reason_for_relevance: "Content mentioning these terms suggests the team is already feeling the pain your product addresses.",
+      },
+      {
+        signal_type: "technology_adoption_signal",
+        enabled: true,
+        priority: "medium",
+        keywords: ["Salesforce", "HubSpot", "Apollo", "Outreach", "Salesloft", "ZoomInfo"],
+        example_matches: [],
+        reason_for_relevance: "Using established sales tools signals maturity in the sales stack and receptivity to complementary GTM solutions.",
+      },
+    ],
+  },
+  learning_loop: {
+    accepted_leads: [],
+    rejected_leads: [],
+    rejection_reasons: [],
+    positive_patterns_to_learn: [],
+    negative_patterns_to_avoid: [],
+    updated_criteria_suggestions: [],
+    next_questions_to_improve_icp: ["What is their average deal size?"],
+  },
+  pain_hypotheses: {
+    known_pains: ["Slow lead qualification", "Poor data quality"],
+    pain_hypotheses: ["Reps spend too much time on manual research"],
+    pain_confidence: "medium",
+    pain_validation_questions: ["How do you currently find leads?"],
+    trigger_events: ["New sales hire", "Missed quota"],
+  },
+  operational_criteria: {
+    what_they_do: ["Sell software to businesses"],
+    workflows: ["Outbound prospecting", "Inbound qualification"],
+    volume_or_scale_signals: ["Growing headcount", "New funding"],
+    use_cases: ["Lead generation", "Pipeline management"],
+    current_tools_or_alternatives: ["Apollo", "ZoomInfo"],
+    maturity_level: "scaling",
+  },
+};
+
 interface IcpRow {
   id: string;
   icp_key: string;
@@ -48,6 +164,11 @@ export default function Icp() {
     if (!q || generating) return;
     setGenerating(true);
     try {
+      if (import.meta.env.DEV) {
+        await new Promise((r) => setTimeout(r, 800));
+        navigate("/icp/new", { state: { icp: MOCK_ICP, prompt: q } });
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("generate-icp", { body: { prompt: q } });
       if (error) throw error;
       if (data?.error) throw new Error(data.detail || data.error);
@@ -121,8 +242,8 @@ export default function Icp() {
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitPrompt(); } }} />
               <Button onClick={submitPrompt} disabled={!prompt.trim() || generating}
                 className={cn("absolute right-3 bottom-3 h-9 px-4 rounded-xl font-semibold text-xs gap-1.5",
-                  "bg-gradient-to-r from-[hsl(262,80%,58%)] to-[hsl(280,80%,60%)]",
-                  "hover:from-[hsl(262,80%,52%)] hover:to-[hsl(280,80%,54%)] text-white disabled:opacity-50")}>
+                  "bg-gradient-to-r from-[#3542FF] to-[#2233DD]",
+                  "hover:from-[#2535EE] hover:to-[#1828CC] text-white disabled:opacity-50")}>
                 {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 {generating ? "Generating…" : "Generate ICP"}
               </Button>

@@ -38,7 +38,7 @@ export const REJECTION_REASONS = [
 ] as const;
 
 export const SENIORITY_LEVELS = ["founder", "c_level", "vp", "head", "director", "manager", "individual_contributor"] as const;
-export const TARGET_ENTITY_TYPES = ["company", "person", "both"] as const;
+export const TARGET_ENTITY_TYPES = ["company", "person"] as const;
 export const CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
 export const MATURITY_LEVELS = ["early", "scaling", "mature", "unknown"] as const;
 export const EXA_ENTITY_TYPES = ["company", "person", "custom"] as const;
