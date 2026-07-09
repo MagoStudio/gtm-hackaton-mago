@@ -11,57 +11,57 @@ import { cn } from "@/lib/utils";
 
 const MOCK_ICP = {
   icp_summary: {
-    icp_name: "Mock ICP",
-    one_line_definition: "B2B SaaS companies scaling their sales team",
-    target_entity_type: "company",
-    primary_goal: "Book demos with sales leaders at growing SaaS companies",
-    offer_summary: "AI-powered GTM platform",
-    confidence_level: "medium",
-    assumptions_to_validate: ["They have a dedicated sales team", "They use a CRM"],
+    icp_name: "Post Supervisors — Vertical Drama",
+    one_line_definition: "Freelance and studio post supervisors managing episodic pipelines for vertical drama productions processing 20+ episodes per season",
+    target_entity_type: "person",
+    primary_goal: "Get post supervisors to adopt Mago for batch AI stylization across full seasons of vertical drama",
+    offer_summary: "Mago AI video transformation — batch stylization at scale for 9:16 episodic content",
+    confidence_level: "high",
+    assumptions_to_validate: ["They manage multi-episode seasons (20+)", "They control or influence tooling decisions", "They work across multiple productions per year"],
   },
   target_account_criteria: {
-    company_types: ["SaaS", "Software"],
-    industries: ["Technology", "B2B Software"],
-    business_models: ["SaaS", "Subscription"],
-    company_size: { min_employees: 20, max_employees: 500 },
-    geographies: ["United States", "Europe"],
-    reference_companies: ["Salesforce", "HubSpot"],
+    company_types: ["Streaming Platform", "Production Studio", "Post House", "Freelance"],
+    industries: ["Vertical Drama", "Short-form Video", "Streaming Entertainment", "Post Production"],
+    business_models: ["Platform", "Freelance", "Studio"],
+    company_size: { min_employees: 1, max_employees: 500 },
+    geographies: ["Los Angeles", "London", "Istanbul", "Madrid", "Kyiv", "Paris"],
+    reference_companies: ["BluTV", "Brut Media", "Wattpad Studios", "Fremantle UK", "WEBTOON Entertainment", "Gain TV"],
     similar_to_reference_companies: true,
-    funding_stage: ["Series A", "Series B"],
-    technology_keywords: ["CRM", "Sales automation"],
-    must_have_criteria: ["Has a sales team", "B2B focus"],
-    nice_to_have_criteria: ["Uses Salesforce", "Has SDR team"],
+    funding_stage: [],
+    technology_keywords: ["DaVinci Resolve", "Premiere Pro", "After Effects", "vertical format", "9:16"],
+    must_have_criteria: ["Works on vertical drama productions", "Manages post pipeline for episodic content"],
+    nice_to_have_criteria: ["Manages team of editors or colorists", "Has evaluated or used AI post tools"],
   },
   buyer_personas: {
-    target_titles: ["VP of Sales", "Head of Sales", "CRO"],
-    target_departments: ["Sales", "Revenue"],
-    seniority_levels: ["VP", "C-Level", "Director"],
-    persona_priority: ["VP of Sales", "CRO"],
-    excluded_titles: ["Intern", "Coordinator"],
+    target_titles: ["Post Production Supervisor", "Post Supervisor", "Head of Post", "Supervisora de Post Producción"],
+    target_departments: ["Post Production", "Delivery", "Operations"],
+    seniority_levels: ["head", "director", "manager"],
+    persona_priority: ["Post Production Supervisor", "Head of Post"],
+    excluded_titles: ["Intern", "Assistant Editor", "Runner"],
   },
   exclusions: {
-    excluded_company_types: ["B2C", "Non-profit"],
-    excluded_industries: ["Gaming", "Media"],
-    excluded_keywords: ["freelance", "agency"],
+    excluded_company_types: ["Advertising Agency", "Corporate Video", "Wedding Video"],
+    excluded_industries: ["Horizontal video only", "Traditional broadcast only"],
+    excluded_keywords: ["horizontal format", "16:9 only", "broadcast television"],
     excluded_titles: [],
-    bad_fit_examples: [],
-    disqualification_rules: ["Less than 10 employees", "No sales team"],
+    bad_fit_examples: ["Traditional TV post houses with no vertical drama output"],
+    disqualification_rules: ["Works exclusively on horizontal format content", "No episodic vertical drama in portfolio"],
   },
   search_keywords: {
-    must_include_keywords: ["SaaS", "sales"],
-    semantic_keywords: ["revenue growth", "pipeline"],
-    related_terms: ["outbound", "SDR", "BDR"],
-    competitor_or_alternative_keywords: ["Outreach", "Apollo"],
-    exclude_keywords: ["agency", "consulting"],
+    must_include_keywords: ["vertical drama", "post production", "9:16", "episodic"],
+    semantic_keywords: ["micro drama", "short-form series", "social drama", "vertical series"],
+    related_terms: ["TikTok drama", "Instagram Reels series", "YouTube Shorts drama", "vertical storytelling"],
+    competitor_or_alternative_keywords: ["Runway ML", "Topaz Video AI", "DaVinci Resolve AI", "Adobe Sensei"],
+    exclude_keywords: ["horizontal", "16:9", "broadcast", "corporate video"],
   },
   exa_config: {
-    exa_entity_type: "company",
+    exa_entity_type: "person",
     exa_search_mode: "websets",
-    exa_criteria: ["B2B SaaS company", "Has a sales team"],
+    exa_criteria: ["Post supervisor working on vertical drama series", "Works with episodic 9:16 content", "Based in LA, London, Istanbul, Madrid, Kyiv, or Paris"],
     exa_enrichments: [],
     exa_result_count: 50,
     exa_freshness: "last_90_days",
-    exa_output_fields: ["name", "website", "description"],
+    exa_output_fields: ["name", "title", "company", "linkedin_url", "location"],
   },
   sillage_signal_config: {
     selected_signals: [
@@ -135,6 +135,16 @@ interface IcpRow {
   created_at: string;
 }
 
+const T = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
+
+const MOCK_ICP_ROWS: IcpRow[] = [
+  { id: 'mock-icp-1', icp_key: 'post-supervisors-vertical', version: 2, name: 'Post Supervisors — Vertical Drama', tier: 'tier-1', definition: { icp_summary: { one_line_definition: 'Post production supervisors managing episodic pipelines for vertical drama studios processing 20+ episodes per season' } }, created_at: T(7) },
+  { id: 'mock-icp-2', icp_key: 'colorists-vertical-drama', version: 1, name: 'Colorists — Vertical Drama', tier: 'tier-1', definition: { icp_summary: { one_line_definition: 'Freelance colorists grading 9:16 episodic content across streaming platforms in LA, London, Istanbul & Paris' } }, created_at: T(2) },
+  { id: 'mock-icp-3', icp_key: 'vfx-micro-drama', version: 1, name: 'VFX Freelancers — Micro Drama', tier: 'tier-1', definition: { icp_summary: { one_line_definition: 'VFX compositors and artists specializing in vertical-format episodic drama for TikTok and Reels' } }, created_at: T(3) },
+  { id: 'mock-icp-4', icp_key: 'lead-editors-vertical', version: 1, name: 'Lead Editors — Vertical Drama', tier: 'tier-2', definition: { icp_summary: { one_line_definition: 'Lead editors cutting 60–90 s episodes for TikTok, YouTube Shorts, and Instagram Reels drama series' } }, created_at: T(5) },
+  { id: 'mock-icp-5', icp_key: 'directors-vertical-drama', version: 1, name: 'Directors & DPs — Vertical Drama', tier: 'tier-2', definition: { icp_summary: { one_line_definition: 'Directors and cinematographers shooting vertical format drama across LA, London, Istanbul, Madrid, Kyiv, and Paris' } }, created_at: T(10) },
+];
+
 export default function Icp() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -145,6 +155,10 @@ export default function Icp() {
   // Load the latest version of each ICP (highest version per icp_key).
   const load = useCallback(async () => {
     if (!user) return;
+    if (import.meta.env.DEV) {
+      setIcps(MOCK_ICP_ROWS);
+      return;
+    }
     const { data } = await supabase
       .from("icps")
       .select("id, icp_key, version, name, tier, definition, created_at")
