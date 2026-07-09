@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 const ENRICHMENT_SYSTEM_PROMPT = `You are a B2B lead intelligence analyst. You will be given research data about a company. Analyze it and produce a structured fit assessment.
 
@@ -26,9 +26,9 @@ serve(async (req) => {
 
   try {
     const EXA_API_KEY = Deno.env.get("EXA_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!EXA_API_KEY) throw new Error("EXA_API_KEY is not configured");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -95,77 +95,73 @@ RECENT NEWS:
 ${formatResults(newsSearch)}
 `;
 
-        const aiResponse = await fetch(AI_GATEWAY, {
+        const aiResponse = await fetch(ANTHROPIC_URL, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: ENRICHMENT_SYSTEM_PROMPT },
-              { role: "user", content: researchContext },
-            ],
+            model: "claude-sonnet-4-6",
+            max_tokens: 2000,
+            system: ENRICHMENT_SYSTEM_PROMPT,
+            messages: [{ role: "user", content: researchContext }],
             tools: [
               {
-                type: "function",
-                function: {
-                  name: "enrich_lead",
-                  description: "Return structured enrichment data for the lead",
-                  parameters: {
-                    type: "object",
-                    properties: {
-                      summary: { type: "string", description: "2-3 sentence company summary" },
-                      company_type: { type: "string", description: "Short label for the type of company (free-form)" },
-                      fit_score: { type: "integer", description: "1-10 fit score" },
-                      fit_reason: { type: "string", description: "Why this score" },
-                      pain_points: { type: "array", items: { type: "string" }, description: "Identified pain points" },
-                      tech_stack: { type: "array", items: { type: "string" }, description: "Known tools and technologies" },
-                      product_hooks: { type: "array", items: { type: "string" }, description: "Angles to pitch the product" },
-                      champions: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            name: { type: "string" },
-                            title: { type: "string" },
-                            linkedin_url: { type: "string" },
-                          },
-                          required: ["name", "title"],
+                name: "enrich_lead",
+                description: "Return structured enrichment data for the lead",
+                input_schema: {
+                  type: "object",
+                  properties: {
+                    summary: { type: "string", description: "2-3 sentence company summary" },
+                    company_type: { type: "string", description: "Short label for the type of company (free-form)" },
+                    fit_score: { type: "integer", description: "1-10 fit score" },
+                    fit_reason: { type: "string", description: "Why this score" },
+                    pain_points: { type: "array", items: { type: "string" }, description: "Identified pain points" },
+                    tech_stack: { type: "array", items: { type: "string" }, description: "Known tools and technologies" },
+                    product_hooks: { type: "array", items: { type: "string" }, description: "Angles to pitch the product" },
+                    champions: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          name: { type: "string" },
+                          title: { type: "string" },
+                          linkedin_url: { type: "string" },
                         },
-                        description: "Key decision-makers",
+                        required: ["name", "title"],
                       },
-                      recent_signals: { type: "array", items: { type: "string" }, description: "Recent news, projects, funding" },
-                      region: { type: "string", description: "Geographic region (US, EU, UK, etc.)" },
-                      employee_count: { type: "string", description: "Estimated headcount range" },
-                      funding_stage: { type: "string", description: "Funding stage if known" },
-                      location: { type: "string", description: "City, Country" },
+                      description: "Key decision-makers",
                     },
-                    required: ["summary", "company_type", "fit_score", "fit_reason", "pain_points", "tech_stack", "product_hooks", "champions", "region"],
-                    additionalProperties: false,
+                    recent_signals: { type: "array", items: { type: "string" }, description: "Recent news, projects, funding" },
+                    region: { type: "string", description: "Geographic region (US, EU, UK, etc.)" },
+                    employee_count: { type: "string", description: "Estimated headcount range" },
+                    funding_stage: { type: "string", description: "Funding stage if known" },
+                    location: { type: "string", description: "City, Country" },
                   },
+                  required: ["summary", "company_type", "fit_score", "fit_reason", "pain_points", "tech_stack", "product_hooks", "champions", "region"],
                 },
               },
             ],
-            tool_choice: { type: "function", function: { name: "enrich_lead" } },
+            tool_choice: { type: "tool", name: "enrich_lead" },
           }),
         });
 
         if (!aiResponse.ok) {
           const txt = await aiResponse.text();
-          console.error(`AI gateway error for ${lead.id}: ${aiResponse.status} ${txt}`);
+          console.error(`Anthropic error for ${lead.id}: ${aiResponse.status} ${txt}`);
           return null;
         }
 
         const aiData = await aiResponse.json();
-        const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-        if (!toolCall) {
-          console.error(`No tool call in AI response for ${lead.id}`);
+        const toolUse = (aiData.content || []).find((b: { type: string }) => b.type === "tool_use");
+        if (!toolUse) {
+          console.error(`No tool use in AI response for ${lead.id}`);
           return null;
         }
 
-        const enrichment = JSON.parse(toolCall.function.arguments);
+        const enrichment = toolUse.input;
 
         const { error: updateErr } = await supabase
           .from("lead_candidates")
