@@ -19,7 +19,7 @@ export function AgentLayout({ title, icon, children }: AgentLayoutProps) {
       <header className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <Link to="/agents">
+            <Link to="/">
               <Button variant="ghost" size="icon" className="h-9 w-9">
                 <ArrowLeft className="h-4 w-4" />
               </Button>

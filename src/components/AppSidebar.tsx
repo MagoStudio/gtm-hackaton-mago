@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Target, Kanban, Bot, TrendingUp, LogOut, Settings, User, FileText } from "lucide-react";
+import { Target, Kanban, Workflow, TrendingUp, LogOut, Settings, User } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,7 @@ import {
 const NAV_ITEMS = [
   { title: "ICP", url: "/", icon: Target },
   { title: "Pipeline", url: "/pipeline", icon: Kanban },
-  { title: "Quotes", url: "/quotes", icon: FileText },
-  { title: "Agents ⚠️WIP", url: "/agents", icon: Bot },
+  { title: "Sequences", url: "/sequences", icon: Workflow },
 ];
 
 export function AppSidebar() {

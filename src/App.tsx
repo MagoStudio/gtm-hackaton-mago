@@ -7,14 +7,9 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Pipeline from "./pages/Pipeline";
-import Agents from "./pages/Agents";
+import Sequences from "./pages/Sequences";
 import LeadGen from "./pages/agents/LeadGen";
-import PipelineAgent from "./pages/agents/PipelineAgent";
 import CrmAgent from "./pages/agents/CrmAgent";
-import SocialAgent from "./pages/agents/SocialAgent";
-import OpenClaw from "./pages/agents/OpenClaw";
-import OpenClawConfig from "./pages/agents/OpenClawConfig";
-import Quotes from "./pages/Quotes";
 import QuoteBuilder from "./pages/QuoteBuilder";
 import QuoteDetail from "./pages/QuoteDetail";
 import QuoteSettings from "./pages/QuoteSettings";
@@ -33,14 +28,11 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/pipeline" element={<Pipeline />} />
-            <Route path="/agents" element={<Agents />} />
+            <Route path="/sequences" element={<Sequences />} />
+            {/* Lead Gen tooling powers the ICP flow; CRM + quote routes are
+                reachable via deep links inside the pipeline deal panel. */}
             <Route path="/agents/lead-gen" element={<LeadGen />} />
-            <Route path="/agents/pipeline" element={<PipelineAgent />} />
             <Route path="/agents/crm" element={<CrmAgent />} />
-            <Route path="/agents/social" element={<SocialAgent />} />
-            <Route path="/agents/openclaw" element={<OpenClaw />} />
-            <Route path="/agents/openclaw/config" element={<OpenClawConfig />} />
-            <Route path="/quotes" element={<Quotes />} />
             <Route path="/quotes/new" element={<QuoteBuilder />} />
             <Route path="/quotes/settings" element={<QuoteSettings />} />
             <Route path="/quotes/:id" element={<QuoteDetail />} />
