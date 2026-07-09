@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { AgentLayout } from "@/components/agents/AgentLayout";
 import { LeadFilters, emptyFilters, type LeadFilterValues } from "@/components/agents/lead-gen/LeadFilters";
@@ -105,6 +105,7 @@ interface RecentSearch {
 export default function LeadGen() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const autoSearched = useRef(false);
   const [filters, setFilters] = useState<LeadFilterValues>(emptyFilters);
   const [leads, setLeads] = useState<LeadResult[]>([]);
@@ -369,6 +370,7 @@ export default function LeadGen() {
 
   const getOrCreateLeadGenUpload = useCallback(async () => {
     if (!user) return null;
+    if (import.meta.env.DEV) return "mock-upload-id";
     const weekLabel = "Lead Gen";
     const { data: existing } = await supabase
       .from("uploads")
@@ -435,6 +437,13 @@ export default function LeadGen() {
       const uploadId = await getOrCreateLeadGenUpload();
       if (!uploadId) { toast.error("Failed to create pipeline entry"); return; }
 
+      if (import.meta.env.DEV) {
+        setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status: "approved" } : l)));
+        toast.success("Lead approved → added to Pipeline");
+        navigate("/pipeline");
+        return;
+      }
+
       const { error } = await supabase.from("lead_candidates").update({ status: "approved" }).eq("id", id);
       if (error) {
         toast.error("Failed to approve lead");
@@ -442,6 +451,7 @@ export default function LeadGen() {
         await insertDealFromLead(lead, uploadId);
         setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status: "approved" } : l)));
         toast.success("Lead approved → added to Pipeline");
+        navigate("/pipeline");
       }
     },
     [leads, user, getOrCreateLeadGenUpload, insertDealFromLead]
@@ -458,6 +468,16 @@ export default function LeadGen() {
       const uploadId = await getOrCreateLeadGenUpload();
       if (!uploadId) { toast.error("Failed to create pipeline entries"); return; }
 
+      if (import.meta.env.DEV) {
+        const pendingLeads = leads.filter((l) => ids.includes(l.id) && l.status === "pending");
+        setLeads((prev) =>
+          prev.map((l) => (ids.includes(l.id) && l.status === "pending" ? { ...l, status: "approved" } : l))
+        );
+        toast.success(`${pendingLeads.length} lead${pendingLeads.length !== 1 ? "s" : ""} added to Pipeline`);
+        navigate("/pipeline");
+        return;
+      }
+
       const { error } = await supabase
         .from("lead_candidates")
         .update({ status: "approved" })
@@ -472,6 +492,7 @@ export default function LeadGen() {
           prev.map((l) => (ids.includes(l.id) && l.status === "pending" ? { ...l, status: "approved" } : l))
         );
         toast.success(`${pendingLeads.length} lead${pendingLeads.length !== 1 ? "s" : ""} added to Pipeline`);
+        navigate("/pipeline");
       }
     },
     [user, leads, getOrCreateLeadGenUpload, insertDealFromLead]
