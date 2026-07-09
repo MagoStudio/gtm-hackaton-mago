@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { Navigate } from "react-router-dom";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { AgentLayout } from "@/components/agents/AgentLayout";
 import { LeadFilters, emptyFilters, type LeadFilterValues } from "@/components/agents/lead-gen/LeadFilters";
@@ -103,6 +103,8 @@ interface RecentSearch {
 
 export default function LeadGen() {
   const { user, loading } = useAuth();
+  const location = useLocation();
+  const autoSearched = useRef(false);
   const [filters, setFilters] = useState<LeadFilterValues>(emptyFilters);
   const [leads, setLeads] = useState<LeadResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -208,6 +210,15 @@ export default function LeadGen() {
     },
     [user, recentSearches, savedICPs, persistSettings]
   );
+
+  // Auto-run a search when arriving from the ICP page with a query.
+  useEffect(() => {
+    const incoming = (location.state as { query?: string } | null)?.query;
+    if (incoming && user && !autoSearched.current) {
+      autoSearched.current = true;
+      handleSearch(incoming);
+    }
+  }, [location.state, user, handleSearch]);
 
   const loadCachedSearch = useCallback(
     async (query: string) => {

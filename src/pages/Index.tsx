@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import Dashboard from './Dashboard';
+import Icp from './Icp';
 
 export default function Index() {
   const { user, loading } = useAuth();
@@ -15,5 +15,5 @@ export default function Index() {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  return <Dashboard />;
+  return <Icp />;
 }

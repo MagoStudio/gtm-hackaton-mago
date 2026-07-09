@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { BarChart3, Kanban, Bot, TrendingUp, LogOut, Settings, User, FileText } from "lucide-react";
+import { Target, Kanban, Bot, TrendingUp, LogOut, Settings, User, FileText } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const NAV_ITEMS = [
-  { title: "Dashboard", url: "/", icon: BarChart3 },
+  { title: "ICP", url: "/", icon: Target },
   { title: "Pipeline", url: "/pipeline", icon: Kanban },
   { title: "Quotes", url: "/quotes", icon: FileText },
   { title: "Agents ⚠️WIP", url: "/agents", icon: Bot },
