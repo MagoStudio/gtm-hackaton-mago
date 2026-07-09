@@ -1,0 +1,1 @@
+ALTER TABLE public.quotes ADD COLUMN IF NOT EXISTS quote_type text NOT NULL DEFAULT 'enterprise_contract';
