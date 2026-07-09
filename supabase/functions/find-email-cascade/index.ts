@@ -1,5 +1,6 @@
-// Email enrichment cascade. Tries providers in order, stops at first verified hit.
-// Currently wired: Apollo.io (people/match). Hunter/Findymail are stubbed and skip when no key.
+// Contact enrichment via FullEnrich waterfall (email + phone).
+// Collects the people to enrich (deal leads + deal contacts), submits one
+// bulk FullEnrich job, polls until finished, then writes email/phone back.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,93 +8,96 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const FULLENRICH_BULK = "https://app.fullenrich.com/api/v1/contact/enrich/bulk";
+
 interface EnrichResult {
   email: string | null;
+  phone: string | null;
   source: string | null;
   confidence: number | null;
   tried: { provider: string; ok: boolean; reason?: string }[];
 }
 
-function domainFromCompany(company: string | null, linkedin?: string | null): string | null {
-  if (!company) return null;
-  // crude fallback: strip common suffixes, lowercase, add .com
-  const cleaned = company
-    .toLowerCase()
-    .replace(/\b(inc|llc|ltd|gmbh|corp|co|studios?|production|productions|media|entertainment|pictures|films?)\b/g, "")
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
-  return cleaned ? `${cleaned}.com` : null;
+interface Person {
+  firstname: string;
+  lastname: string;
+  company_name?: string;
+  linkedin_url?: string;
 }
 
-async function tryApollo(c: {
-  first_name?: string | null;
-  last_name?: string | null;
-  company?: string | null;
-  linkedin_url?: string | null;
-  domain?: string | null;
-}): Promise<{ email: string | null; confidence: number | null; reason?: string }> {
-  const key = Deno.env.get("APOLLO_API_KEY");
-  if (!key) return { email: null, confidence: null, reason: "no_key" };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  const body: Record<string, unknown> = {
-    reveal_personal_emails: true,
-  };
-  if (c.first_name) body.first_name = c.first_name;
-  if (c.last_name) body.last_name = c.last_name;
-  if (c.company) body.organization_name = c.company;
-  if (c.domain) body.domain = c.domain;
-  if (c.linkedin_url) body.linkedin_url = c.linkedin_url;
+// Submit a bulk job and poll until FINISHED. Returns results aligned by index
+// to the input `people` array; entries with insufficient input are null.
+async function fullenrichWaterfall(
+  key: string,
+  people: (Person | null)[],
+): Promise<({ email: string | null; phone: string | null } | null)[]> {
+  const out: ({ email: string | null; phone: string | null } | null)[] = people.map(() => null);
+  const submitIdx: number[] = [];
+  const datas = people
+    .map((p, i) => {
+      if (!p || !p.firstname || !p.lastname || (!p.company_name && !p.linkedin_url)) return null;
+      submitIdx.push(i);
+      return {
+        firstname: p.firstname,
+        lastname: p.lastname,
+        ...(p.company_name ? { company_name: p.company_name } : {}),
+        ...(p.linkedin_url ? { linkedin_url: p.linkedin_url } : {}),
+        enrich_fields: ["contact.emails", "contact.phones"],
+      };
+    })
+    .filter(Boolean);
 
-  const res = await fetch("https://api.apollo.io/api/v1/people/match", {
+  if (datas.length === 0) return out;
+
+  const submitRes = await fetch(FULLENRICH_BULK, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache",
-      "x-api-key": key,
-    },
-    body: JSON.stringify(body),
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "GTM enrichment", providers: ["fullenrich"], datas }),
   });
+  if (!submitRes.ok) {
+    const txt = await submitRes.text().catch(() => "");
+    throw new Error(`FullEnrich submit ${submitRes.status}: ${txt.slice(0, 200)}`);
+  }
+  const { enrichment_id } = await submitRes.json();
+  if (!enrichment_id) throw new Error("FullEnrich returned no enrichment_id");
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    return { email: null, confidence: null, reason: `http_${res.status}: ${txt.slice(0, 120)}` };
+  // Poll up to ~100s.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await sleep(5000);
+    const pollRes = await fetch(`${FULLENRICH_BULK}/${enrichment_id}`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    if (!pollRes.ok) continue;
+    const job = await pollRes.json();
+    if (job.status === "FINISHED") {
+      const rows = job.datas || [];
+      rows.forEach((row: { contact?: { most_probable_email?: string; most_probable_phone?: string } }, j: number) => {
+        const originalIdx = submitIdx[j];
+        if (originalIdx === undefined) return;
+        out[originalIdx] = {
+          email: row.contact?.most_probable_email ?? null,
+          phone: row.contact?.most_probable_phone ?? null,
+        };
+      });
+      return out;
+    }
+    if (["CANCELED", "CREDITS_INSUFFICIENT", "RATE_LIMIT", "UNKNOWN"].includes(job.status)) {
+      throw new Error(`FullEnrich job ${job.status}`);
+    }
   }
-  const json = await res.json();
-  const person = json.person;
-  const email: string | null = person?.email ?? null;
-  if (!email || email === "email_not_unlocked@domain.com") {
-    return { email: null, confidence: null, reason: "no_email_in_response" };
-  }
-  // Apollo gives email_status: verified|guessed|...
-  const status = person?.email_status as string | undefined;
-  const confidence = status === "verified" ? 0.95 : status === "likely" ? 0.7 : 0.5;
-  return { email, confidence };
-}
-
-async function tryHunter(c: {
-  first_name?: string | null;
-  last_name?: string | null;
-  domain?: string | null;
-}): Promise<{ email: string | null; confidence: number | null; reason?: string }> {
-  const key = Deno.env.get("HUNTER_API_KEY");
-  if (!key) return { email: null, confidence: null, reason: "no_key" };
-  if (!c.domain || !c.first_name || !c.last_name) {
-    return { email: null, confidence: null, reason: "missing_inputs" };
-  }
-  const url = `https://api.hunter.io/v2/email-finder?domain=${encodeURIComponent(c.domain)}&first_name=${encodeURIComponent(c.first_name)}&last_name=${encodeURIComponent(c.last_name)}&api_key=${key}`;
-  const res = await fetch(url);
-  if (!res.ok) return { email: null, confidence: null, reason: `http_${res.status}` };
-  const json = await res.json();
-  const email = json?.data?.email ?? null;
-  const score = json?.data?.score ?? null;
-  if (!email) return { email: null, confidence: null, reason: "no_email" };
-  return { email, confidence: score ? score / 100 : 0.5 };
+  // Timed out — return whatever we have (all null); caller reports no hits.
+  return out;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    const FULLENRICH_API_KEY = Deno.env.get("FULLENRICH_API_KEY");
+    if (!FULLENRICH_API_KEY) throw new Error("FULLENRICH_API_KEY is not configured");
+
     const { contactId, contactIds, dealId, dealIds } = await req.json();
 
     const supabase = createClient(
@@ -101,112 +105,77 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const dealIdList: string[] = Array.isArray(dealIds)
-      ? dealIds
-      : dealId
-      ? [dealId]
-      : [];
+    const dealIdList: string[] = Array.isArray(dealIds) ? dealIds : dealId ? [dealId] : [];
 
-    // Resolve contact list
     let ids: string[] = [];
     if (contactId) ids = [contactId];
     else if (Array.isArray(contactIds)) ids = contactIds;
     else if (dealIdList.length > 0) {
-      const { data } = await supabase
-        .from("deal_contacts")
-        .select("id")
-        .in("deal_id", dealIdList)
-        .is("email", null);
+      const { data } = await supabase.from("deal_contacts").select("id").in("deal_id", dealIdList).is("email", null);
       ids = (data ?? []).map((r: { id: string }) => r.id);
     }
 
-    // Also enrich the lead on the deal itself (deals.email) when dealIds provided
-    const leadResults: Array<{ dealId: string; result: EnrichResult }> = [];
-    if (dealIdList.length > 0) {
-      const { data: leadRows } = await supabase
-        .from("deals")
-        .select("id, first_name, last_name, company, linkedin_url, email")
-        .in("id", dealIdList)
-        .is("email", null);
-      for (const d of leadRows ?? []) {
-        const domain = domainFromCompany(d.company, d.linkedin_url);
-        const tried: EnrichResult["tried"] = [];
-        let final: EnrichResult = { email: null, source: null, confidence: null, tried };
-        const providers = [
-          { name: "apollo", fn: () => tryApollo({ first_name: d.first_name, last_name: d.last_name, company: d.company, linkedin_url: d.linkedin_url, domain }) },
-          { name: "hunter", fn: () => tryHunter({ first_name: d.first_name, last_name: d.last_name, domain }) },
-        ];
-        for (const p of providers) {
-          try {
-            const r = await p.fn();
-            tried.push({ provider: p.name, ok: !!r.email, reason: r.reason });
-            if (r.email) { final = { email: r.email, source: p.name, confidence: r.confidence, tried }; break; }
-          } catch (e) {
-            tried.push({ provider: p.name, ok: false, reason: String(e).slice(0, 100) });
-          }
-        }
-        if (final.email) {
-          await supabase.from("deals").update({ email: final.email }).eq("id", d.id);
-        }
-        leadResults.push({ dealId: d.id, result: final });
-      }
-    }
+    // Gather deal leads that still need an email.
+    const { data: leadRows } = dealIdList.length > 0
+      ? await supabase.from("deals").select("id, first_name, last_name, company, linkedin_url, email").in("id", dealIdList).is("email", null)
+      : { data: [] };
 
-    if (ids.length === 0 && leadResults.length === 0) {
+    // Gather contacts.
+    const { data: contactRows } = ids.length > 0
+      ? await supabase.from("deal_contacts").select("id, first_name, last_name, company, linkedin_url, email").in("id", ids)
+      : { data: [] };
+
+    const already = (contactRows ?? []).filter((c) => c.email);
+    const contactsToEnrich = (contactRows ?? []).filter((c) => !c.email);
+
+    if ((leadRows ?? []).length === 0 && contactsToEnrich.length === 0 && already.length === 0) {
       return new Response(JSON.stringify({ results: [], leads: [], message: "no contacts to enrich" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const results: Array<{ contactId: string; result: EnrichResult }> = [];
+    // Build one combined FullEnrich batch: leads first, then contacts.
+    const people: (Person | null)[] = [
+      ...(leadRows ?? []).map((d) => ({
+        firstname: d.first_name || "", lastname: d.last_name || "",
+        company_name: d.company || undefined, linkedin_url: d.linkedin_url || undefined,
+      })),
+      ...contactsToEnrich.map((c) => ({
+        firstname: c.first_name || "", lastname: c.last_name || "",
+        company_name: c.company || undefined, linkedin_url: c.linkedin_url || undefined,
+      })),
+    ];
 
-    if (ids.length > 0) {
-      const { data: contacts, error } = await supabase
-        .from("deal_contacts")
-        .select("id, first_name, last_name, company, linkedin_url, email")
-        .in("id", ids);
-      if (error) throw error;
+    const enriched = people.length > 0 ? await fullenrichWaterfall(FULLENRICH_API_KEY, people) : [];
 
-      for (const c of contacts ?? []) {
-        if (c.email) {
-          results.push({
-            contactId: c.id,
-            result: { email: c.email, source: "existing", confidence: 1, tried: [] },
-          });
-          continue;
-        }
-
-        const domain = domainFromCompany(c.company, c.linkedin_url);
-        const tried: EnrichResult["tried"] = [];
-        let final: EnrichResult = { email: null, source: null, confidence: null, tried };
-
-        const providers: Array<{ name: string; fn: () => Promise<{ email: string | null; confidence: number | null; reason?: string }> }> = [
-          { name: "apollo", fn: () => tryApollo({ ...c, domain }) },
-          { name: "hunter", fn: () => tryHunter({ first_name: c.first_name, last_name: c.last_name, domain }) },
-        ];
-
-        for (const p of providers) {
-          try {
-            const r = await p.fn();
-            tried.push({ provider: p.name, ok: !!r.email, reason: r.reason });
-            if (r.email) {
-              final = { email: r.email, source: p.name, confidence: r.confidence, tried };
-              break;
-            }
-          } catch (e) {
-            tried.push({ provider: p.name, ok: false, reason: String(e).slice(0, 100) });
-          }
-        }
-
-        if (final.email) {
-          await supabase
-            .from("deal_contacts")
-            .update({ email: final.email })
-            .eq("id", c.id);
-        }
-
-        results.push({ contactId: c.id, result: final });
+    const leadResults: Array<{ dealId: string; result: EnrichResult }> = [];
+    let cursor = 0;
+    for (const d of leadRows ?? []) {
+      const r = enriched[cursor++];
+      const tried = [{ provider: "fullenrich", ok: !!r?.email, reason: r?.email ? undefined : "no_hit" }];
+      if (r?.email || r?.phone) {
+        await supabase.from("deals").update({
+          ...(r.email ? { email: r.email } : {}),
+          ...(r.phone ? { phone: r.phone } : {}),
+        }).eq("id", d.id);
       }
+      leadResults.push({ dealId: d.id, result: { email: r?.email ?? null, phone: r?.phone ?? null, source: r?.email ? "fullenrich" : null, confidence: r?.email ? 0.9 : null, tried } });
+    }
+
+    const results: Array<{ contactId: string; result: EnrichResult }> = [];
+    for (const c of already) {
+      results.push({ contactId: c.id, result: { email: c.email, phone: null, source: "existing", confidence: 1, tried: [] } });
+    }
+    for (const c of contactsToEnrich) {
+      const r = enriched[cursor++];
+      const tried = [{ provider: "fullenrich", ok: !!r?.email, reason: r?.email ? undefined : "no_hit" }];
+      if (r?.email || r?.phone) {
+        await supabase.from("deal_contacts").update({
+          ...(r.email ? { email: r.email } : {}),
+          ...(r.phone ? { phone: r.phone } : {}),
+        }).eq("id", c.id);
+      }
+      results.push({ contactId: c.id, result: { email: r?.email ?? null, phone: r?.phone ?? null, source: r?.email ? "fullenrich" : null, confidence: r?.email ? 0.9 : null, tried } });
     }
 
     const hits = results.filter((r) => r.result.email && r.result.source !== "existing").length;

@@ -163,6 +163,20 @@ ${formatResults(newsSearch)}
 
         const enrichment = toolUse.input;
 
+        // Best-effort Sillage augmentation: power-map contacts + buying signals.
+        // Never breaks the core Exa+Claude enrichment if Sillage is slow/empty.
+        try {
+          const sillage = await sillageAugment(lead.website, lead.linkedin_url);
+          if (sillage.champions.length) {
+            enrichment.champions = [...(enrichment.champions || []), ...sillage.champions];
+          }
+          if (sillage.signals.length) {
+            enrichment.recent_signals = [...(enrichment.recent_signals || []), ...sillage.signals];
+          }
+        } catch (e) {
+          console.error(`Sillage augment failed for ${lead.id}:`, e);
+        }
+
         const { error: updateErr } = await supabase
           .from("lead_candidates")
           .update({
@@ -237,4 +251,79 @@ function formatResults(results: any[]): string {
   return results
     .map((r: any) => `- ${r.title || "Untitled"} (${r.url || "no url"})\n  ${(r.highlights || []).slice(0, 2).join(" ").slice(0, 300)}`)
     .join("\n");
+}
+
+const SILLAGE_BASE = "https://api.getsillage.com/api/v2";
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function domainFrom(website?: string | null): string | null {
+  if (!website) return null;
+  const m = website.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0];
+  return m && m.includes(".") ? m : null;
+}
+
+// Best-effort Sillage enrichment: kicks off a company mapping, polls briefly for
+// the ICP-matched power-map (profiles), and pulls recent buying signals.
+// Returns empty arrays on any failure / no key / not ready — never throws.
+async function sillageAugment(
+  website?: string | null,
+  linkedinUrl?: string | null,
+): Promise<{ champions: { name: string; title: string; linkedin_url?: string }[]; signals: string[] }> {
+  const empty = { champions: [], signals: [] };
+  const key = Deno.env.get("SILLAGE_API_KEY");
+  if (!key) return empty;
+  const domain = domainFrom(website);
+  if (!domain && !linkedinUrl) return empty;
+
+  const headers = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+
+  // Kick off enrichment (async). Ignore 402/409/4xx — existing mappings may still resolve.
+  try {
+    await fetch(`${SILLAGE_BASE}/enrich-company-mapping`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(domain ? { domain } : { linkedin_url: linkedinUrl }),
+    });
+  } catch { /* ignore */ }
+
+  const champions: { name: string; title: string; linkedin_url?: string }[] = [];
+
+  // Poll company-mappings for a completed match (~16s budget).
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await sleep(4000);
+    try {
+      const res = await fetch(`${SILLAGE_BASE}/company-mappings?page_size=25`, { headers });
+      if (!res.ok) continue;
+      const list = await res.json();
+      const match = (list.data || []).find((m: any) =>
+        m.status === "complete" && domain && m.company?.domain?.toLowerCase() === domain);
+      if (!match) continue;
+      const detailRes = await fetch(`${SILLAGE_BASE}/company-mappings/${match.id}`, { headers });
+      if (!detailRes.ok) break;
+      const detail = await detailRes.json();
+      for (const p of detail.profiles || []) {
+        const name = p.name || p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ");
+        if (!name) continue;
+        champions.push({ name, title: p.title || p.job_title || "", linkedin_url: p.linkedin_url || undefined });
+      }
+      break;
+    } catch { /* keep polling */ }
+  }
+
+  // Recent buying signals (best-effort).
+  const signals: string[] = [];
+  try {
+    const sigRes = await fetch(`${SILLAGE_BASE}/contents/query`, {
+      method: "POST", headers, body: JSON.stringify({ page_size: 5 }),
+    });
+    if (sigRes.ok) {
+      const sig = await sigRes.json();
+      for (const item of sig.data || []) {
+        const text = item.title || item.summary || item.text || item.type;
+        if (text) signals.push(String(text).slice(0, 200));
+      }
+    }
+  } catch { /* ignore */ }
+
+  return { champions, signals };
 }
