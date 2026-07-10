@@ -60,8 +60,8 @@ function Field({ icon: Icon, label, value }: { icon?: React.ElementType; label: 
   );
 }
 
-function EditableField({ icon: Icon, label, value, fieldName, dealId, type = 'text' }: {
-  icon?: React.ElementType; label: string; value: string | number | null; fieldName: string; dealId: string; type?: 'text' | 'number';
+function EditableField({ icon: Icon, label, value, fieldName, dealId, type = 'text', link = false }: {
+  icon?: React.ElementType; label: string; value: string | number | null; fieldName: string; dealId: string; type?: 'text' | 'number'; link?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(value ?? ''));
@@ -102,6 +102,18 @@ function EditableField({ icon: Icon, label, value, fieldName, dealId, type = 'te
               {updateDeal.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => { setVal(String(value ?? '')); setEditing(false); }} className="h-7 text-xs px-2">✕</Button>
+          </div>
+        ) : link && value ? (
+          <div className="flex items-center gap-2 group/ef">
+            <a
+              href={String(value).startsWith('http') ? String(value) : `https://${value}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-primary hover:underline break-all min-w-0"
+            >
+              {value}
+            </a>
+            <button onClick={() => setEditing(true)} className="text-[10px] text-muted-foreground/0 group-hover/ef:text-muted-foreground/40 transition-colors shrink-0">Edit</button>
           </div>
         ) : (
           <button onClick={() => setEditing(true)} className="w-full text-left group/ef">
@@ -443,7 +455,7 @@ function DetailsTab({ deal }: { deal: Deal }) {
         <EditableField icon={Briefcase} label="Job Title" value={deal.job_title} fieldName="job_title" dealId={deal.id} />
         <EditableField icon={Mail} label="Email" value={deal.email} fieldName="email" dealId={deal.id} />
         <EditableField icon={Phone} label="Phone" value={deal.phone} fieldName="phone" dealId={deal.id} />
-        <EditableField icon={Link2} label="LinkedIn" value={deal.linkedin_url} fieldName="linkedin_url" dealId={deal.id} />
+        <EditableField icon={Link2} label="LinkedIn" value={deal.linkedin_url} fieldName="linkedin_url" dealId={deal.id} link />
         <EditableField icon={MapPin} label="Country" value={deal.country} fieldName="country" dealId={deal.id} />
         <EditableField label="Address" value={deal.address} fieldName="address" dealId={deal.id} />
         <EditableField label="Description" value={deal.description} fieldName="description" dealId={deal.id} />
