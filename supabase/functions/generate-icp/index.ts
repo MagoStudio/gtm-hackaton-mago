@@ -37,6 +37,7 @@ Rules:
 - Avoid hallucinating specific company facts.
 - Use null when information is unknown.
 - Use empty arrays when no value is available.
+- BE CONCISE to keep the response compact: at most 5 items per array, short phrases (not full sentences), and at most 4 Sillage signals and 4 Exa enrichments. Do not pad arrays.
 
 Predefined Sillage signal categories:
 - hiring_signal
@@ -191,6 +192,10 @@ serve(async (req) => {
       });
     }
 
+    // Stream the response. A non-streaming request for a large JSON object can
+    // take >2 min with no bytes on the wire and hit idle timeouts (the "loads
+    // forever" bug). Streaming keeps the connection alive and we accumulate the
+    // text deltas, then parse the whole thing.
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -201,13 +206,14 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 8000,
+        stream: true,
         system: ICP_GENERATION_SYSTEM_PROMPT,
         messages: [{ role: "user", content: prompt }],
       }),
     });
 
-    if (!aiRes.ok) {
-      const errText = await aiRes.text();
+    if (!aiRes.ok || !aiRes.body) {
+      const errText = await aiRes.text().catch(() => "");
       console.error("Anthropic error", aiRes.status, errText);
       return new Response(JSON.stringify({ error: `AI error ${aiRes.status}`, detail: errText.slice(0, 300) }), {
         status: 502,
@@ -215,15 +221,37 @@ serve(async (req) => {
       });
     }
 
-    const aiData = await aiRes.json();
-    const textBlock = (aiData.content || []).find((b: { type: string }) => b.type === "text");
-    if (!textBlock?.text) throw new Error("No text in AI response");
+    // Accumulate SSE text_delta events into the full response text.
+    const reader = aiRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+            fullText += evt.delta.text;
+          }
+        } catch { /* ignore keep-alive / partial lines */ }
+      }
+    }
+
+    if (!fullText.trim()) throw new Error("No text in AI response");
 
     let icp: unknown;
     try {
-      icp = JSON.parse(extractJson(textBlock.text));
+      icp = JSON.parse(extractJson(fullText));
     } catch (e) {
-      console.error("Failed to parse ICP JSON:", e, textBlock.text.slice(0, 300));
+      console.error("Failed to parse ICP JSON:", e, fullText.slice(0, 300));
       return new Response(JSON.stringify({ error: "Failed to parse ICP from AI response" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
