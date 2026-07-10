@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, isAllowedEmail, ALLOWED_EMAIL_DOMAIN } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -27,11 +27,15 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isAllowedEmail(email)) {
+      toast({ title: 'Restricted', description: `Only @${ALLOWED_EMAIL_DOMAIN} email addresses can access this app.`, variant: 'destructive' });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-
-
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -55,11 +59,11 @@ export default function Auth() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-border/50 bg-card shadow-2xl shadow-primary/5">
         <CardHeader className="space-y-2 text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            <svg className="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          </div>
+          <img
+            src="/images/mago-logo-app-on-blue.svg"
+            alt="Mago"
+            className="mx-auto mb-2 h-12 w-12 rounded-xl"
+          />
           <CardTitle className="text-2xl font-bold tracking-tight">Mago Growth OS</CardTitle>
           <CardDescription className="text-muted-foreground">
             {isLogin ? 'Sign in to your account' : 'Create a new account'}

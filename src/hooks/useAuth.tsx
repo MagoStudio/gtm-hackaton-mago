@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
@@ -16,33 +17,38 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
-const MOCK_USER = import.meta.env.DEV ? ({
-  id: 'mock-user-id',
-  email: 'alvaro@mago.studio',
-  role: 'authenticated',
-  aud: 'authenticated',
-  created_at: new Date().toISOString(),
-} as unknown as User) : null;
+// Only @mago.studio accounts may use the app.
+export const ALLOWED_EMAIL_DOMAIN = 'mago.studio';
+export const isAllowedEmail = (email?: string | null) =>
+  !!email && email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(MOCK_USER);
+  const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(MOCK_USER ? false : true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (MOCK_USER) return;
+    // Reject any session whose email isn't @mago.studio (covers pre-existing
+    // accounts and is a second line of defense behind the DB signup trigger).
+    const apply = async (session: Session | null) => {
+      if (session?.user && !isAllowedEmail(session.user.email)) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        toast.error('Access is restricted to mago.studio accounts.');
+        return;
+      }
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      apply(session);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => apply(session));
 
     return () => subscription.unsubscribe();
   }, []);
