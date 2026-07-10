@@ -954,6 +954,86 @@ export type Database = {
           },
         ]
       }
+      sequence_enrollments: {
+        Row: {
+          created_at: string
+          current_step: number
+          deal_id: string
+          id: string
+          last_error: string | null
+          last_step_at: string | null
+          next_action_at: string
+          sequence_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_step?: number
+          deal_id: string
+          id?: string
+          last_error?: string | null
+          last_step_at?: string | null
+          next_action_at?: string
+          sequence_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_step?: number
+          deal_id?: string
+          id?: string
+          last_error?: string | null
+          last_step_at?: string | null
+          next_action_at?: string
+          sequence_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_enrollments_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sequences: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          steps: Json
+          tier: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          steps?: Json
+          tier?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          steps?: Json
+          tier?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       social_content: {
         Row: {
           created_at: string

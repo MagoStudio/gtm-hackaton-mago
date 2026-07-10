@@ -127,6 +127,78 @@ function EditableField({ icon: Icon, label, value, fieldName, dealId, type = 'te
     </div>
   );
 }
+// Enroll a deal into an email sequence (or show its current enrollment).
+function SequenceEnroll({ dealId }: { dealId: string }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<string>('');
+  const [enrolling, setEnrolling] = useState(false);
+
+  const { data: sequences = [] } = useQuery({
+    queryKey: ['sequences', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('sequences').select('id, name').eq('user_id', user!.id);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const { data: enrollment } = useQuery({
+    queryKey: ['enrollment', dealId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('sequence_enrollments')
+        .select('id, status, current_step, sequences(name)')
+        .eq('deal_id', dealId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const enroll = async () => {
+    if (!user || !selected) return;
+    setEnrolling(true);
+    try {
+      const { error } = await supabase.from('sequence_enrollments').insert({
+        user_id: user.id, sequence_id: selected, deal_id: dealId, current_step: 0, next_action_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      toast.success('Enrolled — first step runs on the next sequencer tick');
+      queryClient.invalidateQueries({ queryKey: ['enrollment', dealId] });
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to enroll');
+    } finally { setEnrolling(false); }
+  };
+
+  if (enrollment && enrollment.status !== 'stopped') {
+    const seqName = (enrollment as any).sequences?.name || 'sequence';
+    return (
+      <div className="rounded-md border border-border/40 px-3 py-2 text-xs flex items-center gap-2">
+        <Zap className="h-3.5 w-3.5 text-primary" />
+        In <span className="font-medium">{seqName}</span> · step {enrollment.current_step + 1} · {enrollment.status}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={selected} onValueChange={setSelected}>
+        <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Enroll in sequence…" /></SelectTrigger>
+        <SelectContent>
+          {sequences.length === 0
+            ? <div className="px-2 py-1.5 text-xs text-muted-foreground">No sequences — create one first</div>
+            : sequences.map((s: any) => <SelectItem key={s.id} value={s.id} className="text-xs">{s.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Button size="sm" className="h-8 text-xs gap-1.5" onClick={enroll} disabled={!selected || enrolling}>
+        {enrolling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Enroll
+      </Button>
+    </div>
+  );
+}
+
 const DEFAULT_DEAL_VALUES = [48000, 15000, 1800];
 
 function DealValueSelect({ deal }: { deal: Deal }) {
@@ -739,6 +811,7 @@ function TouchpointsTab({ dealId }: { dealId: string }) {
             AI Outreach
           </Button>
         </div>
+        <SequenceEnroll dealId={dealId} />
       </div>
 
       {/* Log interaction form */}

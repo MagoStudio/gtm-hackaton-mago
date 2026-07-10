@@ -1,4 +1,7 @@
-project_id = "sriynkhsyfrgmipldclg"
+project_id = "gaonwtwhsbbsjpdkissy"
 
 [functions.mcp-server]
+verify_jwt = false
+
+[functions.run-sequences]
 verify_jwt = false
