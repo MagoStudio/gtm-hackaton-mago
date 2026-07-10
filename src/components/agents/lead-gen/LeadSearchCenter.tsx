@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { IcpDefinition } from "./IcpDefinition";
 
 interface SavedICP {
   id: string;
@@ -118,11 +117,6 @@ export function LeadSearchCenter({
             </Button>
           </div>
         )}
-      </div>
-
-      {/* Structured ICP definition (Sillage persona) */}
-      <div className="w-full mb-4">
-        <IcpDefinition />
       </div>
 
       {/* Saved ICPs + Recent Searches */}
