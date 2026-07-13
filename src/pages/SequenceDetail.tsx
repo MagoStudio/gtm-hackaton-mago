@@ -9,12 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Workflow, Plus, Trash2, Play, Mail, Clock, Loader2, Save, Target, Users, Send } from "lucide-react";
+import { Workflow, Play, Loader2, Save, Target, Users, Send } from "lucide-react";
+import { SequenceStepsEditor, normalizeSteps, type Step } from "@/components/SequenceStepsEditor";
 
-interface Step { channel: "email"; delay_hours: number; subject: string; body: string }
 interface IcpOption { icp_key: string; name: string }
-
-const newStep = (first: boolean): Step => ({ channel: "email", delay_hours: first ? 0 : 48, subject: "", body: "" });
 
 export default function SequenceDetail() {
   const { user, loading } = useAuth();
@@ -47,7 +45,7 @@ export default function SequenceDetail() {
       ]);
       if (seq) {
         setName(seq.name);
-        setSteps(((seq.steps as unknown as Step[]) || []).length ? (seq.steps as unknown as Step[]) : [newStep(true)]);
+        setSteps(normalizeSteps(seq.steps as unknown as any[]));
         setIcpKeys((seq.icp_keys as string[]) || []);
       }
       // latest ICP name per icp_key
@@ -59,7 +57,6 @@ export default function SequenceDetail() {
     })();
   }, [id, user, loadEnrolled]);
 
-  const setStep = (i: number, patch: Partial<Step>) => setSteps((s) => s.map((st, idx) => (idx === i ? { ...st, ...patch } : st)));
   const toggleIcp = (key: string) => setIcpKeys((k) => (k.includes(key) ? k.filter((x) => x !== key) : [...k, key]));
 
   const save = async () => {
@@ -151,23 +148,8 @@ export default function SequenceDetail() {
             {/* Steps */}
             <Card className="border-border/40">
               <CardHeader className="pb-3 pt-4 px-4"><CardTitle className="text-sm font-semibold">Email steps</CardTitle></CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
-                {steps.map((st, i) => (
-                  <div key={i} className="rounded-lg border border-border/50 p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-primary" /> Step {i + 1}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> after</span>
-                        <Input type="number" value={st.delay_hours} onChange={(e) => setStep(i, { delay_hours: Number(e.target.value) || 0 })} className="h-6 w-16 text-xs" />
-                        <span className="text-[10px] text-muted-foreground">h</span>
-                        {steps.length > 1 && <button onClick={() => setSteps((s) => s.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>}
-                      </div>
-                    </div>
-                    <Input value={st.subject} onChange={(e) => setStep(i, { subject: e.target.value })} placeholder="Subject — {{first_name}} {{company}}" className="h-7 text-xs" />
-                    <Textarea value={st.body} onChange={(e) => setStep(i, { body: e.target.value })} placeholder="Body / intent — Claude personalizes per lead." className="text-xs min-h-[64px]" />
-                  </div>
-                ))}
-                <Button size="sm" variant="ghost" className="gap-1.5 text-xs" onClick={() => setSteps((s) => [...s, newStep(false)])}><Plus className="h-3.5 w-3.5" /> Add step</Button>
+              <CardContent className="px-4 pb-4">
+                <SequenceStepsEditor steps={steps} onChange={setSteps} />
               </CardContent>
             </Card>
 

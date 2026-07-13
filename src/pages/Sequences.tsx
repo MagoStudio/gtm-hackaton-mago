@@ -6,19 +6,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Workflow, Plus, Trash2, Play, Mail, Clock, Loader2, Save } from "lucide-react";
+import { Workflow, Trash2, Play, Loader2, Save } from "lucide-react";
+import { SequenceStepsEditor, newStep, type Step } from "@/components/SequenceStepsEditor";
 
-interface Step { channel: "email"; delay_hours: number; subject: string; body: string }
 interface Sequence { id: string; name: string; steps: Step[]; created_at: string }
-
-const newStep = (first: boolean): Step => ({
-  channel: "email",
-  delay_hours: first ? 0 : 48,
-  subject: "",
-  body: "",
-});
 
 export default function Sequences() {
   const { user, loading } = useAuth();
@@ -35,9 +27,6 @@ export default function Sequences() {
     setSequences((data as unknown as Sequence[]) || []);
   }, [user]);
   useEffect(() => { load(); }, [load]);
-
-  const setStep = (i: number, patch: Partial<Step>) =>
-    setSteps((s) => s.map((st, idx) => (idx === i ? { ...st, ...patch } : st)));
 
   const save = async () => {
     if (!user || !name.trim()) { toast.error("Name your sequence"); return; }
@@ -99,30 +88,9 @@ export default function Sequences() {
           <CardContent className="px-4 pb-4 space-y-4">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sequence name (e.g. Tier 2 – warm outbound)" className="h-8 text-xs" />
 
-            {steps.map((st, i) => (
-              <div key={i} className="rounded-lg border border-border/50 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-primary" /> Step {i + 1} · email</span>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> after</label>
-                    <Input type="number" value={st.delay_hours} onChange={(e) => setStep(i, { delay_hours: Number(e.target.value) || 0 })} className="h-6 w-16 text-xs" />
-                    <span className="text-[10px] text-muted-foreground">h</span>
-                    {steps.length > 1 && (
-                      <button onClick={() => setSteps((s) => s.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <Input value={st.subject} onChange={(e) => setStep(i, { subject: e.target.value })} placeholder="Subject — supports {{first_name}} {{company}}" className="h-7 text-xs" />
-                <Textarea value={st.body} onChange={(e) => setStep(i, { body: e.target.value })} placeholder="Body / intent. Claude personalizes this per lead. Use {{first_name}}, {{company}}, {{job_title}}." className="text-xs min-h-[64px]" />
-              </div>
-            ))}
+            <SequenceStepsEditor steps={steps} onChange={setSteps} />
 
-            <div className="flex items-center justify-between">
-              <Button size="sm" variant="ghost" className="gap-1.5 text-xs" onClick={() => setSteps((s) => [...s, newStep(false)])}>
-                <Plus className="h-3.5 w-3.5" /> Add step
-              </Button>
+            <div className="flex justify-end">
               <Button size="sm" className="gap-1.5 text-xs" onClick={save} disabled={saving}>
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save sequence
               </Button>
