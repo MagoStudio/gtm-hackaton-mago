@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Workflow, Plus, Trash2, Play, Mail, Clock, Loader2, Save, Target, Users } from "lucide-react";
+import { Workflow, Plus, Trash2, Play, Mail, Clock, Loader2, Save, Target, Users, Send } from "lucide-react";
 
 interface Step { channel: "email"; delay_hours: number; subject: string; body: string }
 interface IcpOption { icp_key: string; name: string }
@@ -29,6 +29,8 @@ export default function SequenceDetail() {
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [enrolledCount, setEnrolledCount] = useState<number | null>(null);
+  const [testEmails, setTestEmails] = useState("");
+  const [testing, setTesting] = useState(false);
 
   const loadEnrolled = useCallback(async () => {
     if (!id) return;
@@ -101,6 +103,19 @@ export default function SequenceDetail() {
     finally { setRunning(false); }
   };
 
+  const sendTest = async () => {
+    const emails = testEmails.split(/[,\n]/).map((e) => e.trim()).filter(Boolean);
+    if (emails.length === 0) { toast.error("Add at least one test email"); return; }
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-test-sequence", { body: { steps, emails } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Sent ${data.sent} test email(s) — ${data.steps} step(s) × ${data.recipients} recipient(s)`);
+    } catch (e: any) { toast.error(e.message || "Test send failed"); }
+    finally { setTesting(false); }
+  };
+
   if (loading || loadingRow) return <div className="flex min-h-screen items-center justify-center bg-background"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -153,6 +168,22 @@ export default function SequenceDetail() {
                   </div>
                 ))}
                 <Button size="sm" variant="ghost" className="gap-1.5 text-xs" onClick={() => setSteps((s) => [...s, newStep(false)])}><Plus className="h-3.5 w-3.5" /> Add step</Button>
+              </CardContent>
+            </Card>
+
+            {/* Send test */}
+            <Card className="border-border/40">
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2"><Send className="h-4 w-4 text-primary" /> Send a test</CardTitle>
+                <p className="text-xs text-muted-foreground">Emails every step (personalized against sample data) to these addresses, prefixed [TEST]. Requires a connected Gmail.</p>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-2">
+                <Textarea value={testEmails} onChange={(e) => setTestEmails(e.target.value)} placeholder="test1@mago.studio, test2@mago.studio" className="text-xs min-h-[52px]" />
+                <div className="flex justify-end">
+                  <Button size="sm" className="h-8 text-xs gap-1.5" onClick={sendTest} disabled={testing || !testEmails.trim()}>
+                    {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send test
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
