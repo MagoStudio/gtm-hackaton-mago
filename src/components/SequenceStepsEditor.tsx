@@ -5,14 +5,19 @@ import { Mail, Trash2, Plus, Clock, Zap } from "lucide-react";
 
 // delay_hours is what the sequencer reads; delay_value/unit are the UI-friendly
 // representation. Recomputed on every edit so they stay in sync.
+export type DelayUnit = "minutes" | "hours" | "days";
+
 export interface Step {
   channel: "email";
   delay_value: number;
-  delay_unit: "hours" | "days";
+  delay_unit: DelayUnit;
   delay_hours: number;
   subject: string;
   body: string;
 }
+
+const toHours = (value: number, unit: DelayUnit): number =>
+  unit === "days" ? value * 24 : unit === "minutes" ? value / 60 : value;
 
 export const newStep = (first: boolean): Step =>
   first
@@ -24,15 +29,22 @@ export const newStep = (first: boolean): Step =>
 export function normalizeSteps(raw: any[]): Step[] {
   const steps = (raw || []).map((s, i) => {
     const hours = typeof s.delay_hours === "number" ? s.delay_hours : 0;
-    let unit: "hours" | "days" = s.delay_unit === "days" ? "days" : s.delay_unit === "hours" ? "hours" : hours > 0 && hours % 24 === 0 ? "days" : "hours";
-    let value = typeof s.delay_value === "number" ? s.delay_value : unit === "days" ? Math.round(hours / 24) : hours;
+    let unit: DelayUnit =
+      s.delay_unit === "days" || s.delay_unit === "hours" || s.delay_unit === "minutes"
+        ? s.delay_unit
+        : hours > 0 && hours < 1 ? "minutes"
+        : hours > 0 && hours % 24 === 0 ? "days"
+        : "hours";
+    let value = typeof s.delay_value === "number"
+      ? s.delay_value
+      : unit === "days" ? Math.round(hours / 24) : unit === "minutes" ? Math.round(hours * 60) : hours;
     if (i === 0) { value = 0; unit = "hours"; }
-    return { channel: "email" as const, delay_value: value, delay_unit: unit, delay_hours: i === 0 ? 0 : unit === "days" ? value * 24 : value, subject: s.subject || "", body: s.body || "" };
+    return { channel: "email" as const, delay_value: value, delay_unit: unit, delay_hours: i === 0 ? 0 : toHours(value, unit), subject: s.subject || "", body: s.body || "" };
   });
   return steps.length ? steps : [newStep(true)];
 }
 
-const recompute = (s: Step): Step => ({ ...s, delay_hours: s.delay_unit === "days" ? s.delay_value * 24 : s.delay_value });
+const recompute = (s: Step): Step => ({ ...s, delay_hours: toHours(s.delay_value, s.delay_unit) });
 
 export function SequenceStepsEditor({ steps, onChange }: { steps: Step[]; onChange: (s: Step[]) => void }) {
   const setStep = (i: number, patch: Partial<Step>) =>
@@ -62,9 +74,10 @@ export function SequenceStepsEditor({ steps, onChange }: { steps: Step[]; onChan
                 />
                 <select
                   value={st.delay_unit}
-                  onChange={(e) => setStep(i, { delay_unit: e.target.value as "hours" | "days" })}
+                  onChange={(e) => setStep(i, { delay_unit: e.target.value as DelayUnit })}
                   className="h-6 text-xs rounded-md border border-border/60 bg-background px-1"
                 >
+                  <option value="minutes">minutes</option>
                   <option value="hours">hours</option>
                   <option value="days">days</option>
                 </select>
