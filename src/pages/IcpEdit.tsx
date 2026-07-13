@@ -113,7 +113,7 @@ export default function IcpEdit() {
 
   const runSearch = () => {
     const query = icp.exa_query || icp.one_line_definition || prompt;
-    navigate("/agents/lead-gen", { state: { query } });
+    navigate("/agents/lead-gen", { state: { query, icpKey } });
   };
 
   if (loading || loadingRow) {

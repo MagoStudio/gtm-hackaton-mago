@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Pipeline from "./pages/Pipeline";
 import Sequences from "./pages/Sequences";
+import SequenceDetail from "./pages/SequenceDetail";
 import IcpEdit from "./pages/IcpEdit";
 import LeadGen from "./pages/agents/LeadGen";
 import CrmAgent from "./pages/agents/CrmAgent";
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/icp/:id" element={<IcpEdit />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/sequences" element={<Sequences />} />
+            <Route path="/sequences/:id" element={<SequenceDetail />} />
             {/* Lead Gen tooling powers the ICP flow; CRM + quote routes are
                 reachable via deep links inside the pipeline deal panel. */}
             <Route path="/agents/lead-gen" element={<LeadGen />} />

@@ -440,6 +440,7 @@ export type Database = {
           email: string | null
           external_id: string | null
           first_name: string | null
+          icp_key: string | null
           id: string
           job_title: string | null
           last_interaction: string | null
@@ -468,6 +469,7 @@ export type Database = {
           email?: string | null
           external_id?: string | null
           first_name?: string | null
+          icp_key?: string | null
           id?: string
           job_title?: string | null
           last_interaction?: string | null
@@ -496,6 +498,7 @@ export type Database = {
           email?: string | null
           external_id?: string | null
           first_name?: string | null
+          icp_key?: string | null
           id?: string
           job_title?: string | null
           last_interaction?: string | null
@@ -1004,6 +1007,7 @@ export type Database = {
       sequences: {
         Row: {
           created_at: string
+          icp_keys: string[]
           id: string
           is_active: boolean
           name: string
@@ -1014,6 +1018,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          icp_keys?: string[]
           id?: string
           is_active?: boolean
           name?: string
@@ -1024,6 +1029,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          icp_keys?: string[]
           id?: string
           is_active?: boolean
           name?: string

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,7 @@ const newStep = (first: boolean): Step => ({
 
 export default function Sequences() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [name, setName] = useState("");
   const [steps, setSteps] = useState<Step[]>([newStep(true)]);
@@ -42,13 +43,12 @@ export default function Sequences() {
     if (!user || !name.trim()) { toast.error("Name your sequence"); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.from("sequences").insert({
+      const { data, error } = await supabase.from("sequences").insert({
         user_id: user.id, name: name.trim(), steps: steps as any,
-      });
+      }).select("id").single();
       if (error) throw error;
-      toast.success("Sequence saved");
-      setName(""); setSteps([newStep(true)]);
-      load();
+      toast.success("Sequence saved — attach ICPs to run it");
+      navigate(`/sequences/${data.id}`);
     } catch (e: any) {
       toast.error(e.message || "Failed to save");
     } finally { setSaving(false); }
@@ -135,12 +135,12 @@ export default function Sequences() {
           <div className="space-y-2">
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Your sequences</p>
             {sequences.map((s) => (
-              <div key={s.id} className="flex items-center justify-between rounded-lg border border-border/40 bg-card px-4 py-3">
-                <div>
+              <div key={s.id} className="flex items-center justify-between rounded-lg border border-border/40 bg-card px-4 py-3 hover:border-primary/50 transition-colors">
+                <button onClick={() => navigate(`/sequences/${s.id}`)} className="text-left flex-1">
                   <p className="text-sm font-medium">{s.name}</p>
-                  <p className="text-xs text-muted-foreground">{(s.steps || []).length} step{(s.steps || []).length !== 1 ? "s" : ""}</p>
-                </div>
-                <button onClick={() => remove(s.id)} className="text-muted-foreground hover:text-destructive">
+                  <p className="text-xs text-muted-foreground">{(s.steps || []).length} step{(s.steps || []).length !== 1 ? "s" : ""} · open to attach ICPs & run</p>
+                </button>
+                <button onClick={() => remove(s.id)} className="text-muted-foreground hover:text-destructive ml-2">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>

@@ -105,6 +105,8 @@ export default function LeadGen() {
   const { user, loading } = useAuth();
   const location = useLocation();
   const autoSearched = useRef(false);
+  // The ICP that launched the current search — tagged onto approved deals.
+  const searchIcpKey = useRef<string | null>(null);
   const [filters, setFilters] = useState<LeadFilterValues>(emptyFilters);
   const [leads, setLeads] = useState<LeadResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -213,10 +215,11 @@ export default function LeadGen() {
 
   // Auto-run a search when arriving from the ICP page with a query.
   useEffect(() => {
-    const incoming = (location.state as { query?: string } | null)?.query;
-    if (incoming && user && !autoSearched.current) {
+    const state = location.state as { query?: string; icpKey?: string } | null;
+    if (state?.icpKey) searchIcpKey.current = state.icpKey;
+    if (state?.query && user && !autoSearched.current) {
       autoSearched.current = true;
-      handleSearch(incoming);
+      handleSearch(state.query);
     }
   }, [location.state, user, handleSearch]);
 
@@ -373,6 +376,7 @@ export default function LeadGen() {
     const { data: deal, error: dealError } = await supabase.from("deals").insert({
       upload_id: uploadId,
       status: "Lead",
+      icp_key: searchIcpKey.current,
       first_name: nameParts[0] || null,
       last_name: nameParts.slice(1).join(" ") || null,
       company: lead.company || null,
