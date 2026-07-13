@@ -409,4 +409,210 @@ app.post("/email/send", async (c) => {
   return jsonRes(c, { success: true });
 });
 
-Deno.serve(app.fetch);
+// --- POST /email/gmail-draft ---
+app.post("/email/gmail-draft", async (c) => {
+  const agent = getAgent(c);
+  if (!hasScope(agent.scopes, "email")) return jsonRes(c, { error: "Scope 'email' required" }, 403);
+
+  const sb = getServiceSupabase();
+  const body = await c.req.json();
+  const { deal_id, to, subject, email_body } = body;
+  if (!to || !subject || !email_body) {
+    return jsonRes(c, { error: "to, subject, and email_body required" }, 400);
+  }
+
+  const { data: token } = await sb
+    .from("gmail_tokens")
+    .select("access_token, refresh_token, expires_at")
+    .eq("user_id", agent.user_id)
+    .single();
+
+  if (!token) {
+    return jsonRes(c, { error: "No Gmail connected for this user. Connect Gmail in Settings first." }, 400);
+  }
+
+  let accessToken = token.access_token;
+  if (new Date(token.expires_at) < new Date()) {
+    const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
+        client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
+        refresh_token: token.refresh_token,
+        grant_type: "refresh_token",
+      }),
+    });
+    const refreshData = await refreshRes.json();
+    if (!refreshData.access_token) {
+      return jsonRes(c, { error: "Failed to refresh Gmail token" }, 500);
+    }
+    accessToken = refreshData.access_token;
+    await sb.from("gmail_tokens").update({
+      access_token: accessToken,
+      expires_at: new Date(Date.now() + refreshData.expires_in * 1000).toISOString(),
+    }).eq("user_id", agent.user_id);
+  }
+
+  const rawEmail = `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${email_body}`;
+  const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  const draftRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: { raw: encodedEmail } }),
+  });
+
+  if (!draftRes.ok) {
+    const err = await draftRes.text();
+    return jsonRes(c, { error: `Gmail draft failed: ${err}` }, 500);
+  }
+
+  const draft = await draftRes.json();
+
+  if (deal_id) {
+    await sb.from("deal_interactions").insert({
+      deal_id,
+      user_id: agent.user_id,
+      interaction_type: "email_drafted",
+      source: "api",
+      subject,
+      body: email_body,
+      contact_email: to,
+    });
+  }
+
+  await logAudit(sb, agent, "email.gmail_draft_created", "email", undefined, { to, subject, deal_id, draft_id: draft.id });
+  return jsonRes(c, { success: true, draft_id: draft.id });
+});
+
+// --- POST /email/send-draft ---
+app.post("/email/send-draft", async (c) => {
+  const agent = getAgent(c);
+  if (!hasScope(agent.scopes, "email")) return jsonRes(c, { error: "Scope 'email' required" }, 403);
+
+  const sb = getServiceSupabase();
+  const body = await c.req.json();
+  const { draft_id, to, recipient_query, deal_id } = body;
+
+  const { data: token } = await sb
+    .from("gmail_tokens")
+    .select("access_token, refresh_token, expires_at")
+    .eq("user_id", agent.user_id)
+    .single();
+
+  if (!token) {
+    return jsonRes(c, { error: "No Gmail connected for this user. Connect Gmail in Settings first." }, 400);
+  }
+
+  let accessToken = token.access_token;
+  if (new Date(token.expires_at) < new Date()) {
+    const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
+        client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
+        refresh_token: token.refresh_token,
+        grant_type: "refresh_token",
+      }),
+    });
+    const refreshData = await refreshRes.json();
+    if (!refreshData.access_token) {
+      return jsonRes(c, { error: "Failed to refresh Gmail token" }, 500);
+    }
+    accessToken = refreshData.access_token;
+    await sb.from("gmail_tokens").update({
+      access_token: accessToken,
+      expires_at: new Date(Date.now() + refreshData.expires_in * 1000).toISOString(),
+    }).eq("user_id", agent.user_id);
+  }
+
+  let draftId = draft_id as string | undefined;
+  let matchedDraft: any = null;
+
+  if (!draftId) {
+    const query = to ? `to:${to}` : recipient_query ? `to:${recipient_query}` : "";
+    if (!query) return jsonRes(c, { error: "draft_id, to, or recipient_query required" }, 400);
+
+    const listRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=10&q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!listRes.ok) {
+      const err = await listRes.text();
+      return jsonRes(c, { error: `Gmail draft lookup failed: ${err}` }, 500);
+    }
+
+    const listData = await listRes.json();
+    const drafts = listData.drafts || [];
+    if (drafts.length === 0) return jsonRes(c, { error: `No Gmail draft found matching ${query}` }, 404);
+
+    const detailedDrafts = await Promise.all(drafts.map(async (draft: any) => {
+      const getRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draft.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (!getRes.ok) return null;
+      return await getRes.json();
+    }));
+
+    matchedDraft = detailedDrafts
+      .filter(Boolean)
+      .sort((a: any, b: any) => Number(b.message?.internalDate || 0) - Number(a.message?.internalDate || 0))[0];
+
+    draftId = matchedDraft?.id || drafts[0].id;
+  } else {
+    const getRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (getRes.ok) matchedDraft = await getRes.json();
+  }
+
+  const sendDraftRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ id: draftId }),
+  });
+
+  if (!sendDraftRes.ok) {
+    const err = await sendDraftRes.text();
+    return jsonRes(c, { error: `Gmail draft send failed: ${err}` }, 500);
+  }
+
+  const sentMessage = await sendDraftRes.json();
+  const headers = matchedDraft?.message?.payload?.headers || [];
+  const subject = headers.find((h: any) => h.name?.toLowerCase() === "subject")?.value || null;
+  const recipient = headers.find((h: any) => h.name?.toLowerCase() === "to")?.value || to || recipient_query || null;
+
+  if (deal_id) {
+    await sb.from("deal_interactions").insert({
+      deal_id,
+      user_id: agent.user_id,
+      interaction_type: "email_sent",
+      source: "api",
+      subject,
+      contact_email: recipient,
+    });
+  }
+
+  await logAudit(sb, agent, "email.gmail_draft_sent", "email", undefined, {
+    to: recipient,
+    subject,
+    deal_id,
+    draft_id: draftId,
+    message_id: sentMessage.id,
+  });
+
+  return jsonRes(c, { success: true, draft_id: draftId, message_id: sentMessage.id, to: recipient, subject });
+});
+
+Deno.serve((req) => {
+  const url = new URL(req.url);
+  url.pathname = url.pathname.replace(/^\/(?:functions\/v1\/)?api-v1/, "") || "/";
+  return app.fetch(new Request(url.toString(), req));
+});

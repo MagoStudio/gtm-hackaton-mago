@@ -3,10 +3,16 @@ project_id = "gaonwtwhsbbsjpdkissy"
 [functions.mcp-server]
 verify_jwt = false
 
+[functions.api-v1]
+verify_jwt = false
+
 # OAuth callback — hit by Google's browser redirect (no JWT); identity is
 # carried in the signed `state` param and writes use the service role.
 [functions.gmail-callback]
 verify_jwt = false
 
 [functions.run-sequences]
+verify_jwt = false
+
+[functions.slack-pipeline-agent]
 verify_jwt = false

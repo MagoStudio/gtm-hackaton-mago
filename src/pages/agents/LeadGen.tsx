@@ -373,12 +373,35 @@ export default function LeadGen() {
 
   const insertDealFromLead = useCallback(async (lead: LeadResult, uploadId: string) => {
     const nameParts = (lead.contact_name || "").split(" ");
+    const firstName = nameParts[0] || null;
+    const lastName = nameParts.slice(1).join(" ") || null;
+
+    if (lead.email) {
+      const { data: existing } = await supabase
+        .from("deals")
+        .select("id")
+        .eq("email", lead.email)
+        .ilike("company", lead.company || "")
+        .limit(1)
+        .maybeSingle();
+      if (existing) return;
+    } else if (lead.company && firstName) {
+      let existingQuery = supabase
+        .from("deals")
+        .select("id")
+        .ilike("company", lead.company)
+        .eq("first_name", firstName);
+      if (lastName) existingQuery = existingQuery.eq("last_name", lastName);
+      const { data: existing } = await existingQuery.limit(1).maybeSingle();
+      if (existing) return;
+    }
+
     const { data: deal, error: dealError } = await supabase.from("deals").insert({
       upload_id: uploadId,
       status: "Lead",
       icp_key: searchIcpKey.current,
-      first_name: nameParts[0] || null,
-      last_name: nameParts.slice(1).join(" ") || null,
+      first_name: firstName,
+      last_name: lastName,
       company: lead.company || null,
       email: lead.email || null,
       linkedin_url: lead.linkedin_url || null,
