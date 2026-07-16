@@ -438,8 +438,13 @@ export type Database = {
           deal_value: number | null
           description: string | null
           email: string | null
+          employee_count: string | null
+          entity_type: string | null
           external_id: string | null
           first_name: string | null
+          fit_reason: string | null
+          fit_score: number | null
+          funding_stage: string | null
           icp_key: string | null
           id: string
           job_title: string | null
@@ -449,10 +454,15 @@ export type Database = {
           lost_reason: string | null
           nb_interactions: number | null
           next_steps: string | null
+          pain_points: string[] | null
           phone: string | null
+          product_hooks: string[] | null
           prospect_owner: string | null
+          recent_signals: string[] | null
+          region: string | null
           status: string
           strongest_connection: string | null
+          tech_stack: string[] | null
           upload_id: string
         }
         Insert: {
@@ -467,8 +477,13 @@ export type Database = {
           deal_value?: number | null
           description?: string | null
           email?: string | null
+          employee_count?: string | null
+          entity_type?: string | null
           external_id?: string | null
           first_name?: string | null
+          fit_reason?: string | null
+          fit_score?: number | null
+          funding_stage?: string | null
           icp_key?: string | null
           id?: string
           job_title?: string | null
@@ -478,10 +493,15 @@ export type Database = {
           lost_reason?: string | null
           nb_interactions?: number | null
           next_steps?: string | null
+          pain_points?: string[] | null
           phone?: string | null
+          product_hooks?: string[] | null
           prospect_owner?: string | null
+          recent_signals?: string[] | null
+          region?: string | null
           status?: string
           strongest_connection?: string | null
+          tech_stack?: string[] | null
           upload_id: string
         }
         Update: {
@@ -496,8 +516,13 @@ export type Database = {
           deal_value?: number | null
           description?: string | null
           email?: string | null
+          employee_count?: string | null
+          entity_type?: string | null
           external_id?: string | null
           first_name?: string | null
+          fit_reason?: string | null
+          fit_score?: number | null
+          funding_stage?: string | null
           icp_key?: string | null
           id?: string
           job_title?: string | null
@@ -507,10 +532,15 @@ export type Database = {
           lost_reason?: string | null
           nb_interactions?: number | null
           next_steps?: string | null
+          pain_points?: string[] | null
           phone?: string | null
+          product_hooks?: string[] | null
           prospect_owner?: string | null
+          recent_signals?: string[] | null
+          region?: string | null
           status?: string
           strongest_connection?: string | null
+          tech_stack?: string[] | null
           upload_id?: string
         }
         Relationships: [
@@ -628,10 +658,12 @@ export type Database = {
           created_at: string
           email: string | null
           employee_count: string | null
+          entity_type: string | null
           feedback: string | null
           fit_reason: string | null
           fit_score: number | null
           funding_stage: string | null
+          icp_key: string | null
           id: string
           job_title: string | null
           last_enriched_at: string | null
@@ -660,10 +692,12 @@ export type Database = {
           created_at?: string
           email?: string | null
           employee_count?: string | null
+          entity_type?: string | null
           feedback?: string | null
           fit_reason?: string | null
           fit_score?: number | null
           funding_stage?: string | null
+          icp_key?: string | null
           id?: string
           job_title?: string | null
           last_enriched_at?: string | null
@@ -692,10 +726,12 @@ export type Database = {
           created_at?: string
           email?: string | null
           employee_count?: string | null
+          entity_type?: string | null
           feedback?: string | null
           fit_reason?: string | null
           fit_score?: number | null
           funding_stage?: string | null
+          icp_key?: string | null
           id?: string
           job_title?: string | null
           last_enriched_at?: string | null

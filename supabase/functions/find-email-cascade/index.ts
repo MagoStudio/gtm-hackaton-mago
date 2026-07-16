@@ -57,8 +57,11 @@ async function fullenrichWaterfall(
     body: JSON.stringify({ name: "GTM enrichment", providers: ["fullenrich"], datas }),
   });
   if (!submitRes.ok) {
+    // Credits/rate issues shouldn't hard-fail the whole enrich action — return
+    // no hits and let the caller report "0 found" instead of erroring.
     const txt = await submitRes.text().catch(() => "");
-    throw new Error(`FullEnrich submit ${submitRes.status}: ${txt.slice(0, 200)}`);
+    console.error(`FullEnrich submit ${submitRes.status}: ${txt.slice(0, 200)}`);
+    return out;
   }
   const { enrichment_id } = await submitRes.json();
   if (!enrichment_id) throw new Error("FullEnrich returned no enrichment_id");
@@ -84,7 +87,10 @@ async function fullenrichWaterfall(
       return out;
     }
     if (["CANCELED", "CREDITS_INSUFFICIENT", "RATE_LIMIT", "UNKNOWN"].includes(job.status)) {
-      throw new Error(`FullEnrich job ${job.status}`);
+      // Degrade gracefully: return whatever was found so the caller reports a
+      // partial/zero result rather than surfacing a hard error.
+      console.error(`FullEnrich job ${job.status}`);
+      return out;
     }
   }
   // Timed out — return whatever we have (all null); caller reports no hits.

@@ -151,7 +151,7 @@ export default function LeadGen() {
   );
 
   const handleSearch = useCallback(
-    async (query: string) => {
+    async (query: string, icpKey?: string | null) => {
       if (!user) return;
       setIsSearching(true);
       setHasSearched(true);
@@ -159,8 +159,10 @@ export default function LeadGen() {
       setLastQuery(query);
 
       try {
+        // When launched from an ICP, pass the key so discover-leads applies the
+        // full criteria (geographies, exclusions, entity type, …), not just text.
         const { data, error } = await supabase.functions.invoke("discover-leads", {
-          body: { query },
+          body: { query, icpKey: icpKey ?? searchIcpKey.current ?? undefined },
         });
 
         if (error) throw error;
@@ -219,7 +221,7 @@ export default function LeadGen() {
     if (state?.icpKey) searchIcpKey.current = state.icpKey;
     if (state?.query && user && !autoSearched.current) {
       autoSearched.current = true;
-      handleSearch(state.query);
+      handleSearch(state.query, state?.icpKey);
     }
   }, [location.state, user, handleSearch]);
 
@@ -384,7 +386,7 @@ export default function LeadGen() {
         .ilike("company", lead.company || "")
         .limit(1)
         .maybeSingle();
-      if (existing) return;
+      if (existing) return null;
     } else if (lead.company && firstName) {
       let existingQuery = supabase
         .from("deals")
@@ -393,7 +395,7 @@ export default function LeadGen() {
         .eq("first_name", firstName);
       if (lastName) existingQuery = existingQuery.eq("last_name", lastName);
       const { data: existing } = await existingQuery.limit(1).maybeSingle();
-      if (existing) return;
+      if (existing) return null;
     }
 
     const { data: deal, error: dealError } = await supabase.from("deals").insert({
@@ -410,11 +412,22 @@ export default function LeadGen() {
       company_vertical: lead.vertical || null,
       country: lead.location || null,
       description: lead.summary || null,
+      // Carry the research from enrichment so approved deals aren't bare.
+      entity_type: (lead as any).entity_type || null,
+      fit_score: lead.fit_score ?? null,
+      fit_reason: lead.fit_reason ?? null,
+      pain_points: lead.pain_points ?? null,
+      tech_stack: lead.tech_stack ?? null,
+      product_hooks: lead.product_hooks ?? null,
+      recent_signals: lead.recent_signals ?? null,
+      region: lead.region ?? null,
+      employee_count: lead.employee_count ?? null,
+      funding_stage: lead.funding_stage ?? null,
     }).select("id").single();
 
     if (dealError || !deal) {
       console.error("Failed to insert deal", dealError);
-      return;
+      return null;
     }
 
     // Auto-assign enriched champions as deal contacts
@@ -434,6 +447,15 @@ export default function LeadGen() {
       const { error: contactsError } = await supabase.from("deal_contacts").insert(contacts);
       if (contactsError) console.error("Failed to insert champions as contacts", contactsError);
     }
+    return deal.id as string;
+  }, []);
+
+  // Auto-enrich newly-approved deals for email/phone (best-effort, background).
+  const autoEnrich = useCallback((dealIds: string[]) => {
+    if (!dealIds.length) return;
+    supabase.functions
+      .invoke("find-email-cascade", { body: { dealIds } })
+      .catch((e) => console.error("auto-enrich failed", e));
   }, []);
 
   const handleApprove = useCallback(
@@ -448,12 +470,13 @@ export default function LeadGen() {
       if (error) {
         toast.error("Failed to approve lead");
       } else {
-        await insertDealFromLead(lead, uploadId);
+        const dealId = await insertDealFromLead(lead, uploadId);
+        if (dealId) autoEnrich([dealId]);
         setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status: "approved" } : l)));
-        toast.success("Lead approved → added to Pipeline");
+        toast.success("Lead approved → added to Pipeline · enriching…");
       }
     },
-    [leads, user, getOrCreateLeadGenUpload, insertDealFromLead]
+    [leads, user, getOrCreateLeadGenUpload, insertDealFromLead, autoEnrich]
   );
 
   const handleReject = useCallback((id: string, reason?: string) => {
@@ -476,14 +499,15 @@ export default function LeadGen() {
         toast.error("Failed to add leads to pipe");
       } else {
         const pendingLeads = leads.filter((l) => ids.includes(l.id) && l.status === "pending");
-        await Promise.all(pendingLeads.map((l) => insertDealFromLead(l, uploadId)));
+        const dealIds = (await Promise.all(pendingLeads.map((l) => insertDealFromLead(l, uploadId)))).filter(Boolean) as string[];
+        autoEnrich(dealIds);
         setLeads((prev) =>
           prev.map((l) => (ids.includes(l.id) && l.status === "pending" ? { ...l, status: "approved" } : l))
         );
-        toast.success(`${pendingLeads.length} lead${pendingLeads.length !== 1 ? "s" : ""} added to Pipeline`);
+        toast.success(`${pendingLeads.length} lead${pendingLeads.length !== 1 ? "s" : ""} added to Pipeline · enriching…`);
       }
     },
-    [user, leads, getOrCreateLeadGenUpload, insertDealFromLead]
+    [user, leads, getOrCreateLeadGenUpload, insertDealFromLead, autoEnrich]
   );
 
   // Apply client-side filters
