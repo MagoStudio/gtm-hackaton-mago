@@ -29,10 +29,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Submit a bulk job and poll until FINISHED. Returns results aligned by index
 // to the input `people` array; entries with insufficient input are null.
+type WaterfallResult = { results: ({ email: string | null; phone: string | null } | null)[]; creditIssue: boolean };
+
 async function fullenrichWaterfall(
   key: string,
   people: (Person | null)[],
-): Promise<({ email: string | null; phone: string | null } | null)[]> {
+): Promise<WaterfallResult> {
   const out: ({ email: string | null; phone: string | null } | null)[] = people.map(() => null);
   const submitIdx: number[] = [];
   const datas = people
@@ -49,7 +51,7 @@ async function fullenrichWaterfall(
     })
     .filter(Boolean);
 
-  if (datas.length === 0) return out;
+  if (datas.length === 0) return { results: out, creditIssue: false };
 
   const submitRes = await fetch(FULLENRICH_BULK, {
     method: "POST",
@@ -61,7 +63,7 @@ async function fullenrichWaterfall(
     // no hits and let the caller report "0 found" instead of erroring.
     const txt = await submitRes.text().catch(() => "");
     console.error(`FullEnrich submit ${submitRes.status}: ${txt.slice(0, 200)}`);
-    return out;
+    return { results: out, creditIssue: submitRes.status === 402 };
   }
   const { enrichment_id } = await submitRes.json();
   if (!enrichment_id) throw new Error("FullEnrich returned no enrichment_id");
@@ -84,17 +86,17 @@ async function fullenrichWaterfall(
           phone: row.contact?.most_probable_phone ?? null,
         };
       });
-      return out;
+      return { results: out, creditIssue: false };
     }
     if (["CANCELED", "CREDITS_INSUFFICIENT", "RATE_LIMIT", "UNKNOWN"].includes(job.status)) {
       // Degrade gracefully: return whatever was found so the caller reports a
       // partial/zero result rather than surfacing a hard error.
       console.error(`FullEnrich job ${job.status}`);
-      return out;
+      return { results: out, creditIssue: job.status === "CREDITS_INSUFFICIENT" || job.status === "RATE_LIMIT" };
     }
   }
   // Timed out — return whatever we have (all null); caller reports no hits.
-  return out;
+  return { results: out, creditIssue: false };
 }
 
 Deno.serve(async (req) => {
@@ -152,7 +154,9 @@ Deno.serve(async (req) => {
       })),
     ];
 
-    const enriched = people.length > 0 ? await fullenrichWaterfall(FULLENRICH_API_KEY, people) : [];
+    const { results: enriched, creditIssue } = people.length > 0
+      ? await fullenrichWaterfall(FULLENRICH_API_KEY, people)
+      : { results: [] as ({ email: string | null; phone: string | null } | null)[], creditIssue: false };
 
     const leadResults: Array<{ dealId: string; result: EnrichResult }> = [];
     let cursor = 0;
@@ -191,6 +195,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         results,
         leads: leadResults,
+        credits_insufficient: creditIssue,
         summary: { processed: results.length, found: hits, leadsProcessed: leadResults.length, leadsFound: leadHits },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

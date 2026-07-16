@@ -128,6 +128,11 @@ export default function Pipeline() {
         body: { dealIds },
       });
       if (error) throw error;
+      if (data?.credits_insufficient) {
+        toast.warning('FullEnrich credits exhausted — top up the FullEnrich account to enrich emails/phones.', { duration: 8000 });
+        setEnrichingStage(null);
+        return;
+      }
       const found = data?.summary?.found ?? 0;
       const processed = data?.summary?.processed ?? contactsMissing;
       const leadsFound = data?.summary?.leadsFound ?? 0;
