@@ -25,6 +25,25 @@ export default function Auth() {
 
   if (user) return <Navigate to="/" replace />;
 
+  const handleForgotPassword = async () => {
+    if (!isAllowedEmail(email)) {
+      toast({ title: 'Enter your email', description: `Type your @${ALLOWED_EMAIL_DOMAIN} email above, then click "Forgot password".`, variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast({ title: 'Check your email', description: 'We sent a password reset link.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -98,6 +117,15 @@ export default function Auth() {
           >
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
+          {isLogin && (
+            <button
+              onClick={handleForgotPassword}
+              disabled={submitting}
+              className="mt-2 w-full text-center text-xs text-muted-foreground/70 transition-colors hover:text-foreground"
+            >
+              Forgot password?
+            </button>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import Pipeline from "./pages/Pipeline";
 import Sequences from "./pages/Sequences";
 import SequenceDetail from "./pages/SequenceDetail";
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/quotes/:id" element={<QuoteDetail />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
